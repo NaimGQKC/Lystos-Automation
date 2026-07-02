@@ -1,0 +1,30 @@
+services:
+  worker:
+    build: .
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./agents:/app/agents:ro
+    restart: unless-stopped
+    command: ["node", "dist/index.js", "worker"]
+
+  webhook:
+    build: .
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./agents:/app/agents:ro
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    command: ["node", "dist/index.js", "serve"]
+
+  # One-shot ingestion, run from host cron:
+  #   docker compose run --rm app npm run ingest
+  app:
+    build: .
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./agents:/app/agents:ro
+    profiles: ["manual"]

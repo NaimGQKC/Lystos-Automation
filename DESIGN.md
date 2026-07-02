@@ -1,6 +1,6 @@
 # Lystos Listing-Outreach Automation — Design Document
 
-**Status:** Draft for discussion (no code yet)
+**Status:** Implemented (MVP) — see README.md. Decisions taken since this draft: her plan has **no API access** and the €0.50/lead native assistant is rejected, so ingestion is Option C done right (Playwright session against her account, intercepting the SPA's JSON rather than scraping the DOM). Stack simplifications for a single-VPS deployment: SQLite instead of Postgres (schema ports directly if/when needed) and a DB-backed outbox worker instead of Redis/BullMQ. WhatsApp Cloud API confirmed as the sending channel.
 **Goal:** When a private owner ("particular") publishes a new property listing in the agent's target zones, automatically send them a first-touch message — reliably, compliantly, and fast enough to beat competing agents. Built so onboarding a second, third, Nth agent is configuration, not code.
 
 ---

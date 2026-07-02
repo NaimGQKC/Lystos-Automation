@@ -1,0 +1,50 @@
+# Copy to <agent-id>.agent.yaml and edit. One file per real-estate agent —
+# onboarding a new agent is adding a file here plus the env vars it references.
+id: example
+name: María García — Inmobiliaria Ejemplo
+timezone: Europe/Madrid
+
+lystos:
+  # Env vars LYSTOS_EXAMPLE_EMAIL / LYSTOS_EXAMPLE_PASSWORD hold the login.
+  credentialsEnvPrefix: LYSTOS_EXAMPLE
+  # The agent's saved search / alert feed inside app.lystos.com. Log into her
+  # account, open the search scoped to her zones + "particulares", copy the URL.
+  searchUrl: https://app.lystos.com/search/REPLACE-ME
+
+filters:
+  zones: ["Gràcia", "Eixample"]
+  priceMin: 100000
+  priceMax: 750000
+  propertyTypes: []          # empty = any
+  privateOwnerOnly: true
+
+whatsapp:
+  # Meta WhatsApp Cloud API credentials for HER sender number.
+  phoneNumberIdEnv: WA_EXAMPLE_PHONE_NUMBER_ID
+  accessTokenEnv: WA_EXAMPLE_ACCESS_TOKEN
+  templates:
+    # Each entry must exist as an APPROVED template in Meta Business Manager.
+    # `variables` order must match the template's {{1}}, {{2}}, ... slots.
+    # Two variants = automatic A/B test (deterministic 50/50 split by phone).
+    - name: first_touch_a
+      metaTemplateName: captacion_saludo_v1
+      language: es
+      variables: [ownerName, propertyLabel, zone, agentName]
+      preview: >-
+        Hola {{ownerName}}, he visto tu anuncio del {{propertyLabel}} en
+        {{zone}}. Soy {{agentName}}, agente inmobiliaria de la zona, y tengo
+        compradores buscando activamente. ¿Te interesaría que hablemos?
+        (Responde BAJA para no recibir más mensajes.)
+    - name: first_touch_b
+      metaTemplateName: captacion_valoracion_v1
+      language: es
+      variables: [ownerName, zone, price, agentName]
+      preview: >-
+        Hola {{ownerName}}, soy {{agentName}}, agente en {{zone}}. He visto tu
+        anuncio publicado por {{price}} y me encantaría contarte cómo están
+        cerrando operaciones similares en tu zona. ¿Hablamos?
+        (Responde BAJA para no recibir más mensajes.)
+  sending:
+    quietHours: { start: "20:30", end: "09:30" }
+    dailyCap: 25
+    minSecondsBetweenSends: 120
