@@ -10,6 +10,11 @@ export const env = {
   port: Number(process.env.PORT ?? 8080),
   waVerifyToken: process.env.WA_VERIFY_TOKEN ?? "",
   waGraphVersion: process.env.WA_GRAPH_VERSION ?? "v21.0",
+  /** Overridable so a mock server can stand in for Meta during rehearsals. */
+  waGraphBaseUrl: process.env.WA_GRAPH_BASE_URL ?? "https://graph.facebook.com",
+  /** Explicit Chromium binary for playwright (optional; used when the
+   *  installed playwright version doesn't match the system browsers). */
+  chromiumPath: process.env.CHROMIUM_PATH || undefined,
   /** Worker loop tick in seconds (per-agent pacing is enforced on top). */
   workerTickSeconds: Number(process.env.WORKER_TICK_SECONDS ?? 20),
 };

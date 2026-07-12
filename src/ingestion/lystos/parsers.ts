@@ -16,7 +16,7 @@ export function parseListingsPayload(url: string, json: unknown): RawListing[] |
   const listings: RawListing[] = [];
   for (const item of items) {
     const it = item as Record<string, unknown>;
-    const id = str(it.id ?? it.listingId ?? it.adId ?? it.uuid);
+    const id = idStr(it.id ?? it.listingId ?? it.adId ?? it.uuid);
     if (!id) continue;
     listings.push({
       sourceId: `lystos:${id}`,
@@ -63,6 +63,9 @@ function findListingArray(json: unknown, depth = 0): unknown[] | null {
 }
 
 const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+/** Ids may arrive as numbers or strings depending on the endpoint. */
+const idStr = (v: unknown): string | undefined =>
+  typeof v === "number" && Number.isFinite(v) ? String(v) : str(v);
 const num = (v: unknown): number | undefined => {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string") {

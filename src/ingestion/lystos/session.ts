@@ -24,7 +24,10 @@ export class LystosSession {
 
   async page(): Promise<Page> {
     if (!this.browser) {
-      this.browser = await chromium.launch({ headless: this.opts.headless ?? true });
+      this.browser = await chromium.launch({
+        headless: this.opts.headless ?? true,
+        executablePath: env.chromiumPath,
+      });
     }
     if (!this.context) {
       mkdirSync(join(env.dataDir, "state"), { recursive: true });

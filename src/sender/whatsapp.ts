@@ -22,7 +22,7 @@ export interface TemplateSend {
 export async function sendTemplate(agent: AgentConfig, msg: TemplateSend): Promise<SendResult> {
   const phoneNumberId = requireEnv(agent.whatsapp.phoneNumberIdEnv);
   const accessToken = requireEnv(agent.whatsapp.accessTokenEnv);
-  const url = `https://graph.facebook.com/${env.waGraphVersion}/${phoneNumberId}/messages`;
+  const url = `${env.waGraphBaseUrl}/${env.waGraphVersion}/${phoneNumberId}/messages`;
 
   const body = {
     messaging_product: "whatsapp",

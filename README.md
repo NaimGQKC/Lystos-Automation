@@ -27,6 +27,7 @@ WhatsApp Cloud API ◀── worker (quiet hours, daily cap, pacing, ◀── o
 | `npm run capture -- <agent>` | Calibration: records the Lystos app's network traffic + DOM to `data/capture/`. |
 | `npm run report` | Pipeline state, message previews, latest replies. |
 | `npm test` | Test suite (pipeline idempotency, dedupe, scheduling, webhook, opt-outs). |
+| `npm run smoke` | Full end-to-end rehearsal: real browser scraper + pipeline + live-mode sender + webhooks against built-in fake Lystos/Meta servers. No credentials needed. |
 
 Append an agent id to `ingest`/`worker`/`capture` to target one agent.
 
@@ -39,6 +40,9 @@ npm install
 npx playwright install chromium   # browser for the Lystos session
 cp .env.example .env              # fill in secrets
 ```
+
+If a system Chromium should be used instead of the Playwright-managed one,
+point `CHROMIUM_PATH` at its binary.
 
 ### 2. Calibrate the Lystos scraper (one-time, per Lystos UI change)
 

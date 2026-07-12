@@ -10,7 +10,8 @@
     "worker": "tsx src/index.ts worker",
     "serve": "tsx src/index.ts serve",
     "capture": "tsx src/index.ts capture",
-    "report": "tsx src/index.ts report"
+    "report": "tsx src/index.ts report",
+    "smoke": "tsx scripts/e2e-smoke.ts"
   },
   "repository": {
     "type": "git",
