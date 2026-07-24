@@ -56,6 +56,10 @@ npm run report
 Prints the listings it matched and the exact emails it would write.
 Nothing is contacted — `DRY_RUN=true`.
 
+Listings where no owner email was found are **not** dropped: they appear
+under "Needs a human" with the owner's phone and the listing link, so they
+can be picked up manually.
+
 ## 5. Create real drafts
 
 When the report looks right, set `DRY_RUN=false` in `.env`, then:

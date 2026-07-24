@@ -37,6 +37,22 @@ export function report(db: DB): string {
     }
   }
 
+  const review = db.prepare(
+    `SELECT title, zone, price, owner_name, owner_phone, url FROM listings
+     WHERE status = 'needs_review' ORDER BY first_seen_at DESC LIMIT 20`,
+  ).all() as {
+    title: string | null; zone: string | null; price: number | null;
+    owner_name: string | null; owner_phone: string | null; url: string | null;
+  }[];
+  if (review.length) {
+    lines.push("== Needs a human: no email found, contact by phone ==");
+    for (const r of review) {
+      const price = r.price ? `${r.price.toLocaleString("es-ES")} €` : "?";
+      lines.push(`  ${r.title ?? "(sin título)"} — ${r.zone ?? "?"} — ${price}`);
+      lines.push(`     ${r.owner_name ?? "propietario"}: ${r.owner_phone ?? "sin teléfono"}  ${r.url ?? ""}`);
+    }
+  }
+
   const replies = db.prepare(
     "SELECT ts, contact_key, body FROM inbound ORDER BY ts DESC LIMIT 20",
   ).all() as { ts: string; contact_key: string; body: string }[];

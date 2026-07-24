@@ -16,6 +16,8 @@ export interface IngestStats {
    *  whether the chosen channel is viable for this feed. */
   withPhone: number;
   withEmail: number;
+  /** No email, but reachable some other way: queued for a human to handle. */
+  needsReview: number;
 }
 
 /** One ingestion pass for one agent: pull listings from the source, keep the
@@ -35,7 +37,8 @@ export function processListings(
   listings: RawListing[],
 ): IngestStats {
   const stats: IngestStats = {
-    seen: listings.length, new: 0, queued: 0, skipped: {}, withPhone: 0, withEmail: 0,
+    seen: listings.length, new: 0, queued: 0, skipped: {},
+    withPhone: 0, withEmail: 0, needsReview: 0,
   };
   const skip = (reason: string) => {
     stats.skipped[reason] = (stats.skipped[reason] ?? 0) + 1;
@@ -80,9 +83,14 @@ export function processListings(
 
     const contact = resolveContact(agent, l);
     if (!contact) {
+      // Most particulares publish an email. The rest are worth a human look
+      // rather than a silent drop: park them in the review queue with
+      // whatever contact detail we do have (usually a phone).
       const reason = agent.channel === "email" ? "no_owner_email" : "no_valid_phone";
-      setStatus.run("skipped", reason, l.sourceId);
-      skip(reason);
+      const parked = agent.channel === "email" && Boolean(l.ownerPhone);
+      setStatus.run(parked ? "needs_review" : "skipped", reason, l.sourceId);
+      if (parked) stats.needsReview++;
+      else skip(reason);
       return;
     }
 

@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS listings (
   owner_email   TEXT,
   is_private_owner INTEGER,
   raw           TEXT NOT NULL,
-  status        TEXT NOT NULL DEFAULT 'new',   -- new | queued | skipped
+  status        TEXT NOT NULL DEFAULT 'new',   -- new | queued | skipped | needs_review
   skip_reason   TEXT,
   first_seen_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

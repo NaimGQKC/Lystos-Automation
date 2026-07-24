@@ -22,10 +22,22 @@ describe("pipeline", () => {
     expect(msg.channel).toBe("whatsapp");
   });
 
-  it("skips listings with no email when the channel is email", () => {
+  it("parks a listing with no email but a phone for a human to handle", () => {
     const db = testDb();
     const stats = processListings(db, testAgent(), "lystos", [listing({ ownerEmail: undefined })]);
     expect(stats.queued).toBe(0);
+    expect(stats.needsReview).toBe(1);
+    const row = db.prepare("SELECT status, skip_reason, owner_phone FROM listings").get() as any;
+    expect(row).toMatchObject({ status: "needs_review", skip_reason: "no_owner_email" });
+    expect(row.owner_phone).toBe("612 345 678"); // she can still call them
+  });
+
+  it("skips outright when there is no way to reach the owner at all", () => {
+    const db = testDb();
+    const stats = processListings(db, testAgent(), "lystos", [
+      listing({ ownerEmail: undefined, ownerPhone: undefined }),
+    ]);
+    expect(stats.needsReview).toBe(0);
     expect(stats.skipped).toMatchObject({ no_owner_email: 1 });
   });
 
@@ -63,7 +75,7 @@ describe("pipeline", () => {
     const db = testDb();
     const stats = processListings(db, testAgent(), "lystos", [
       listing({ sourceId: "l1", isPrivateOwner: false }),
-      listing({ sourceId: "l2", ownerEmail: "nonsense" }),
+      listing({ sourceId: "l2", ownerEmail: "nonsense", ownerPhone: undefined }),
       listing({ sourceId: "l3", price: 999_999_999 }),
     ]);
     expect(stats.queued).toBe(0);

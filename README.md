@@ -153,4 +153,7 @@ the schema in `src/db/schema.sql` ports directly.
   phone), ever — across relistings and across agents.
 - `events` is an append-only audit log of every queued/sent/failed message
   and opt-out: your GDPR accountability record.
+- Listings without an owner email are parked as `needs_review` (with the
+  phone and listing link) rather than silently dropped — `npm run report`
+  lists them for manual follow-up.
 - Identify the agent honestly in message one. No sends during quiet hours.
