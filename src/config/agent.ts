@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { parse } from "yaml";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 /** WhatsApp templates must exist, pre-approved, in Meta Business Manager. */
@@ -97,11 +97,19 @@ export function loadAgent(path: string): AgentConfig {
   return AgentConfigSchema.parse(parse(readFileSync(path, "utf8")));
 }
 
-/** Loads every *.agent.yaml in the agents/ directory. Onboarding a new agent
- *  is dropping a file here — no code changes. */
-export function loadAgents(dir = "agents"): AgentConfig[] {
-  const files = readdirSync(dir).filter((f) => f.endsWith(".agent.yaml"));
-  if (files.length === 0) throw new Error(`No *.agent.yaml files found in ${dir}/`);
+/** Loads every *.agent.yaml in the agents/ directory.
+ *
+ *  No YAML at all is the normal single-agent case: everything falls back to
+ *  the env-driven default (see config/defaults.ts). Add YAML files only when
+ *  running several agents with different zones, mailboxes or wording. */
+export async function loadAgents(dir = "agents"): Promise<AgentConfig[]> {
+  const files = existsSync(dir)
+    ? readdirSync(dir).filter((f) => f.endsWith(".agent.yaml"))
+    : [];
+  if (files.length === 0) {
+    const { defaultAgent } = await import("./defaults.js");
+    return [defaultAgent()];
+  }
   const agents = files.map((f) => loadAgent(join(dir, f)));
   const ids = new Set<string>();
   for (const a of agents) {

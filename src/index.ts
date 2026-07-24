@@ -11,8 +11,8 @@ import { report } from "./report.js";
 
 const [command, arg] = process.argv.slice(2);
 
-function agentsFor(id?: string) {
-  const agents = loadAgents();
+async function agentsFor(id?: string) {
+  const agents = await loadAgents();
   if (!id) return agents;
   const found = agents.filter((a) => a.id === id);
   if (found.length === 0) throw new Error(`Unknown agent id: ${id}`);
@@ -26,7 +26,7 @@ async function main(): Promise<void> {
     case "ingest": {
       // One pass over every agent's Lystos feed. Run from cron/systemd-timer
       // every few minutes — speed-to-lead is most of the value.
-      for (const agent of agentsFor(arg)) {
+      for (const agent of await agentsFor(arg)) {
         const stats = await ingest(db, agent, new LystosScraper(agent));
         logger.info({ agent: agent.id, ...stats }, "ingest complete");
       }
@@ -36,7 +36,7 @@ async function main(): Promise<void> {
     case "worker": {
       // Long-running send loop. Dry-run by default; DRY_RUN=false to go live.
       logger.info({ dryRun: env.dryRun, tick: env.workerTickSeconds }, "worker started");
-      const agents = agentsFor(arg);
+      const agents = await agentsFor(arg);
       const tick = async () => {
         for (const agent of agents) {
           const outcome = await processAgentQueue(db, agent).catch((err) => {
@@ -59,7 +59,7 @@ async function main(): Promise<void> {
     }
 
     case "capture": {
-      for (const agent of agentsFor(arg)) await capture(agent);
+      for (const agent of await agentsFor(arg)) await capture(agent);
       break;
     }
 

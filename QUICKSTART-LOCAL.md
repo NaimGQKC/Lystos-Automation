@@ -1,138 +1,96 @@
-# Real testing on your own machine (~15 min)
+# Setup (~5 min)
 
-Why local: your computer has a real Chrome and a Spanish/residential IP.
-Cloud sandboxes get connection-reset by Lystos's CDN. Run this once and we
-know the whole thing works.
+No config files. Fill in `.env`, run two commands.
 
-**Two layers of safety.** `DRY_RUN=true` (the default) contacts nothing at
-all. And even with `DRY_RUN=false`, `mode: draft` only writes into her
-**Drafts folder** — she reviews each one and presses send herself. Flipping
-to real sending is a one-line change, later, when you're ready.
-
-## 1. Get the code
+## 1. Install
 
 Requires Node 20+ (`node -v`; if missing: https://nodejs.org).
 
-```bash
-git clone https://github.com/NaimGQKC/Lystos-Automation.git
-cd Lystos-Automation
+```powershell
+git clone https://github.com/NaimGQKC/Lystos-Automation.git lystos-bot
+cd lystos-bot
 git checkout claude/lystos-agent-automation-f7fgop
 npm install
 npx playwright install chromium
 ```
 
-Sanity check that everything works before touching real accounts:
+Check it works before touching real accounts (uses a built-in fake Lystos):
 
-```bash
-npm test        # 38 tests
-npm run smoke   # full end-to-end rehearsal, prints a sample draft
+```powershell
+npm run smoke
 ```
 
-## 2. Point it at her Lystos search
+## 2. Fill in `.env`
 
-```bash
-cp agents/example.agent.yaml agents/maria.agent.yaml
-cp .env.example .env
+```powershell
+copy .env.example .env
+notepad .env
 ```
 
-In her Lystos account, open the saved search for her zones filtered to
-**particulares**, and copy the URL from the address bar.
+Six lines: her Lystos login, her name, and her mailbox login. That's it —
+the particulares (FSBO) feed is a fixed page on Lystos, so there's nothing
+to configure.
 
-Edit `agents/maria.agent.yaml`:
-- `id: maria`
-- `searchUrl:` → paste that URL
-- `credentialsEnvPrefix: LYSTOS_MARIA`
-- `fromEnv/userEnv/passwordEnv` → `EMAIL_MARIA_FROM` / `_USER` / `_PASSWORD`
-- `zones`, `priceMin`, `priceMax` → her real targets
-- the two `templates` → her words (edit freely, no approval needed)
+Gmail/Outlook with 2FA need an **app password**, not the account password.
 
-Edit `.env` (gitignored — credentials never reach GitHub):
+## 3. Watch it log in
 
-```
-LYSTOS_MARIA_EMAIL=her-lystos-email
-LYSTOS_MARIA_PASSWORD=her-lystos-password
-
-EMAIL_MARIA_FROM=María García <maria@inmobiliaria.es>
-EMAIL_MARIA_USER=maria@inmobiliaria.es
-EMAIL_MARIA_PASSWORD=her-app-password
+```powershell
+$env:HEADFUL=1
+npm run capture
 ```
 
-If her mail is Gmail/Outlook with 2FA, generate an **app password** — the
-normal account password won't authenticate over IMAP/SMTP.
+Chrome opens, logs into Lystos, loads the particulares feed, and saves
+everything it sees to `data\capture\default\`.
 
-## 3. Watch it log into Lystos
+If login fails, open `data\capture\default\page.png` — that screenshot shows
+where it stopped.
 
-```bash
-HEADFUL=1 npm run capture -- maria
+## 4. See what it would send
+
+```powershell
+npm run ingest
+npm run report
 ```
 
-A Chrome window opens, logs in, and loads her search. Everything it sees is
-saved to `data/capture/maria/`. **This is the moment of truth** — if login
-works and files appear, the hard part is solved.
+Prints the listings it matched and the exact emails it would write.
+Nothing is contacted — `DRY_RUN=true`.
 
-If it fails, open `data/capture/maria/page.png` to see where it stopped and
-send me that plus the terminal output.
+## 5. Create real drafts
 
-## 4. Send me the feed
+When the report looks right, set `DRY_RUN=false` in `.env`, then:
 
-```bash
-cat data/capture/maria/_index.json
-```
-
-Open the 2–3 JSON files whose URLs look like the listing feed (search /
-listings / anuncios) and **paste me their contents**. Scrub personal data if
-you like — I only need field *names* and structure.
-
-This also answers the one open question: **do her listings carry owner email
-addresses?** If they only have phones, email can't reach owners directly and
-we'll switch the plan (see below).
-
-## 5. See the real messages
-
-Once I've calibrated the parser to her real feed:
-
-```bash
-npm run ingest -- maria     # scrape + match + queue
-npm run report              # exactly what would be sent, to whom
-```
-
-Still zero contact — `DRY_RUN=true`.
-
-## 6. Create real drafts in her mailbox
-
-When the report looks right:
-
-```bash
-DRY_RUN=false npm run worker -- maria
+```powershell
+npm run worker
 ```
 
 Drafts appear in her Drafts folder, addressed to owners, ready for her to
-review and send. Stop it with Ctrl-C once a few have landed.
+review and send. Ctrl-C to stop.
 
-## 7. Later: flip to fully automatic sending
+## 6. Later: fully automatic
 
-In `agents/maria.agent.yaml`, change `mode: draft` → `mode: send`. Same
-pipeline, no drafts — emails go straight out, respecting quiet hours, the
-daily cap, and pacing.
+Add `EMAIL_MODE=send` to `.env`. Same pipeline, no drafts — emails go
+straight out, respecting the daily cap, pacing, and quiet hours.
 
-## If owner emails don't exist in the feed
+## Running it on a schedule
 
-Then the owner-email plan can't work as-is, and the options are:
-1. **Draft to her instead** — same automation, the draft lands in her inbox
-   with the owner's phone and a ready-to-send message she copies into
-   WhatsApp. One small change.
-2. **Go back to WhatsApp** — the code still supports it (`channel: whatsapp`),
-   it just needs the Meta Business setup you wanted to avoid.
+`npm run ingest` is one pass — run it every few minutes (Task Scheduler on
+Windows, cron on Linux). `npm run worker` runs continuously and drains the
+queue.
 
-The capture in step 4 tells us which world we're in.
+## Optional tweaks (all in `.env`)
 
-## Using a Spanish rotating IP (optional)
+| Variable | Effect |
+| :-- | :-- |
+| `ZONES=Gràcia,Eixample` | Only these areas |
+| `PRICE_MIN` / `PRICE_MAX` | Only this price band |
+| `LYSTOS_SEARCH_URL` | Watch a specific saved search instead |
+| `PROXY_SERVER` | Route through a Spanish residential IP |
+| `SMTP_HOST` / `IMAP_HOST` / `DRAFTS_MAILBOX` | Non-Gmail mailboxes |
 
-If Lystos blocks your IP, add to `.env`:
+## Multiple agents
 
-```
-PROXY_SERVER=http://user:pass@es-proxy-host:port
-```
-
-The browser session routes through it automatically. Residential Spanish IPs
-work; datacenter IPs are what get reset.
+Drop a `<name>.agent.yaml` into `agents/` (see
+`agents/example.agent.yaml.sample`) for each extra agent with different
+zones, mailbox or wording. With no YAML files present, everything runs from
+`.env` as above.

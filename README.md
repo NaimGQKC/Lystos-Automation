@@ -10,6 +10,11 @@ vars — no code changes.
 
 **New here? Start with [QUICKSTART-LOCAL.md](QUICKSTART-LOCAL.md).**
 
+No config files needed for a single agent — fill in `.env` and run. The
+particulares (FSBO) feed is a fixed page on Lystos, so there's nothing to
+configure. `agents/*.agent.yaml` exists only for running several agents with
+different zones, mailboxes or wording.
+
 See [DESIGN.md](DESIGN.md) for the full architecture and rationale.
 
 ```
