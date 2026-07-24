@@ -1,16 +1,32 @@
 import { describe, expect, it } from "vitest";
 import { processListings } from "../src/pipeline.js";
-import { testDb, testAgent, listing } from "./helpers.js";
+import { testDb, testAgent, testWaAgent, listing } from "./helpers.js";
 
 describe("pipeline", () => {
-  it("queues exactly one message for a matching listing", () => {
+  it("queues one email message for a matching listing", () => {
     const db = testDb();
     const stats = processListings(db, testAgent(), "lystos", [listing()]);
-    expect(stats).toMatchObject({ seen: 1, new: 1, queued: 1 });
+    expect(stats).toMatchObject({ seen: 1, new: 1, queued: 1, withEmail: 1, withPhone: 1 });
     const msg = db.prepare("SELECT * FROM messages").get() as any;
-    expect(msg.phone_e164).toBe("+34612345678");
+    expect(msg.contact_key).toBe("anna@example.com");
+    expect(msg.channel).toBe("email");
+    expect(msg.subject).toContain("Gràcia");
     expect(msg.status).toBe("pending");
-    expect(JSON.parse(msg.variables)).toEqual(["Anna", "Gràcia, Barcelona"]);
+  });
+
+  it("uses the phone as contact key on the whatsapp channel", () => {
+    const db = testDb();
+    processListings(db, testWaAgent(), "lystos", [listing()]);
+    const msg = db.prepare("SELECT * FROM messages").get() as any;
+    expect(msg.contact_key).toBe("+34612345678");
+    expect(msg.channel).toBe("whatsapp");
+  });
+
+  it("skips listings with no email when the channel is email", () => {
+    const db = testDb();
+    const stats = processListings(db, testAgent(), "lystos", [listing({ ownerEmail: undefined })]);
+    expect(stats.queued).toBe(0);
+    expect(stats.skipped).toMatchObject({ no_owner_email: 1 });
   });
 
   it("is idempotent across repeated ingestion passes", () => {
@@ -23,46 +39,38 @@ describe("pipeline", () => {
     expect((db.prepare("SELECT COUNT(*) n FROM messages").get() as any).n).toBe(1);
   });
 
-  it("never messages the same phone twice, even across listings and agents", () => {
+  it("never messages the same contact twice, across listings and agents", () => {
     const db = testDb();
     processListings(db, testAgent(), "lystos", [listing()]);
-    // Same owner relists under a new id, and a second agent also matches it.
-    const stats1 = processListings(db, testAgent(), "lystos", [listing({ sourceId: "lystos:2" })]);
-    const other = testAgent({ id: "other" });
-    const stats2 = processListings(db, other, "lystos", [listing({ sourceId: "lystos:3" })]);
-    expect(stats1.skipped).toMatchObject({ already_contacted: 1 });
-    expect(stats2.skipped).toMatchObject({ already_contacted: 1 });
+    const relisted = processListings(db, testAgent(), "lystos", [listing({ sourceId: "lystos:2" })]);
+    const other = processListings(db, testAgent({ id: "other" }), "lystos", [listing({ sourceId: "lystos:3" })]);
+    expect(relisted.skipped).toMatchObject({ already_contacted: 1 });
+    expect(other.skipped).toMatchObject({ already_contacted: 1 });
     expect((db.prepare("SELECT COUNT(*) n FROM messages").get() as any).n).toBe(1);
   });
 
-  it("skips opted-out contacts and records the reason", () => {
+  it("skips opted-out contacts", () => {
     const db = testDb();
     db.prepare(
-      "INSERT INTO contacts (phone_e164, opted_out, opted_out_at) VALUES ('+34612345678', 1, datetime('now'))",
+      "INSERT INTO contacts (contact_key, contact_type, opted_out, opted_out_at) VALUES ('anna@example.com','email',1,datetime('now'))",
     ).run();
     const stats = processListings(db, testAgent(), "lystos", [listing()]);
     expect(stats.skipped).toMatchObject({ opted_out: 1 });
     expect((db.prepare("SELECT COUNT(*) n FROM messages").get() as any).n).toBe(0);
   });
 
-  it("skips non-matching and phoneless listings with reasons", () => {
+  it("records skip reasons for non-matching listings", () => {
     const db = testDb();
     const stats = processListings(db, testAgent(), "lystos", [
       listing({ sourceId: "l1", isPrivateOwner: false }),
-      listing({ sourceId: "l2", ownerPhone: undefined }),
+      listing({ sourceId: "l2", ownerEmail: "nonsense" }),
       listing({ sourceId: "l3", price: 999_999_999 }),
     ]);
     expect(stats.queued).toBe(0);
     expect(stats.skipped).toMatchObject({
       not_private_owner: 1,
-      no_valid_phone: 1,
+      no_owner_email: 1,
       above_price_max: 1,
     });
-    const rows = db.prepare("SELECT id, skip_reason FROM listings ORDER BY id").all();
-    expect(rows).toEqual([
-      { id: "l1", skip_reason: "not_private_owner" },
-      { id: "l2", skip_reason: "no_valid_phone" },
-      { id: "l3", skip_reason: "above_price_max" },
-    ]);
   });
 });

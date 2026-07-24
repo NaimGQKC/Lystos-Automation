@@ -22,21 +22,27 @@ export function report(db: DB): string {
   lines.push("== Messages ==");
   for (const r of messages) lines.push(`  ${r.agent_id}  ${r.status}: ${r.n}`);
 
-  const pendingPreviews = db.prepare(
-    `SELECT agent_id, phone_e164, preview FROM messages
-     WHERE status IN ('pending', 'dry_run') ORDER BY created_at DESC LIMIT 20`,
-  ).all() as { agent_id: string; phone_e164: string; preview: string }[];
-  if (pendingPreviews.length) {
-    lines.push("== Latest pending / dry-run previews ==");
-    for (const r of pendingPreviews) lines.push(`  [${r.agent_id}] ${r.phone_e164}: ${r.preview}`);
+  const previews = db.prepare(
+    `SELECT agent_id, contact_key, subject, preview, status FROM messages
+     WHERE status IN ('pending', 'dry_run', 'drafted') ORDER BY created_at DESC LIMIT 10`,
+  ).all() as {
+    agent_id: string; contact_key: string; subject: string | null; preview: string; status: string;
+  }[];
+  if (previews.length) {
+    lines.push("== Messages awaiting review / would be sent ==");
+    for (const r of previews) {
+      lines.push(`  ---- [${r.agent_id}] to ${r.contact_key} (${r.status})`);
+      if (r.subject) lines.push(`  Asunto: ${r.subject}`);
+      for (const line of r.preview.split("\n")) lines.push(`  | ${line}`);
+    }
   }
 
   const replies = db.prepare(
-    "SELECT ts, phone_e164, body FROM inbound ORDER BY ts DESC LIMIT 20",
-  ).all() as { ts: string; phone_e164: string; body: string }[];
+    "SELECT ts, contact_key, body FROM inbound ORDER BY ts DESC LIMIT 20",
+  ).all() as { ts: string; contact_key: string; body: string }[];
   if (replies.length) {
     lines.push("== Latest replies ==");
-    for (const r of replies) lines.push(`  ${r.ts}  ${r.phone_e164}: ${r.body}`);
+    for (const r of replies) lines.push(`  ${r.ts}  ${r.contact_key}: ${r.body}`);
   }
 
   return lines.join("\n") || "(empty)";

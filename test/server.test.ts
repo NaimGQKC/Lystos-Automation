@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildServer, isOptOut } from "../src/server.js";
 import { processListings } from "../src/pipeline.js";
-import { testDb, testAgent, listing } from "./helpers.js";
+import { testDb, testWaAgent, listing } from "./helpers.js";
 
 describe("opt-out detection", () => {
   it("catches explicit unsubscribe intents only", () => {
@@ -16,9 +16,9 @@ describe("opt-out detection", () => {
 describe("whatsapp webhook", () => {
   it("updates delivery status by wa_message_id", async () => {
     const db = testDb();
-    const agent = testAgent();
+    const agent = testWaAgent();
     processListings(db, agent, "lystos", [listing()]);
-    db.prepare("UPDATE messages SET status = 'sent', wa_message_id = 'wamid.1'").run();
+    db.prepare("UPDATE messages SET status = 'sent', provider_ref = 'wamid.1'").run();
 
     const app = buildServer(db);
     const res = await app.inject({
@@ -34,7 +34,7 @@ describe("whatsapp webhook", () => {
 
   it("hard-blocks a contact on opt-out and cancels pending messages", async () => {
     const db = testDb();
-    processListings(db, testAgent(), "lystos", [listing()]);
+    processListings(db, testWaAgent(), "lystos", [listing()]);
 
     const app = buildServer(db);
     await app.inject({

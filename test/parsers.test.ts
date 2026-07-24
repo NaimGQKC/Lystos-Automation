@@ -9,7 +9,7 @@ describe("parseListingsPayload", () => {
         {
           id: 98211, title: "Piso en Verdi", price: 385000, neighborhood: "Gràcia",
           rooms: 3, surface: 85, advertiserType: "particular",
-          contact: { name: "Anna", phone: "612 345 678" },
+          contact: { name: "Anna", phone: "612 345 678", email: "anna@example.com" },
         },
         { id: "abc-123", price: 200000, municipality: "Barcelona", advertiserType: "agency" },
       ],
@@ -24,6 +24,7 @@ describe("parseListingsPayload", () => {
       sqm: 85,
       ownerName: "Anna",
       ownerPhone: "612 345 678",
+      ownerEmail: "anna@example.com",
       isPrivateOwner: true,
     });
     expect(listings[1]).toMatchObject({ sourceId: "lystos:abc-123" });

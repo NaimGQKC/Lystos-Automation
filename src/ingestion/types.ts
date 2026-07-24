@@ -12,6 +12,7 @@ export interface RawListing {
   sqm?: number;
   ownerName?: string;
   ownerPhone?: string;
+  ownerEmail?: string;
   /** true = published by a private owner ("particular"), false = agency, undefined = unknown */
   isPrivateOwner?: boolean;
   raw: unknown;

@@ -30,6 +30,7 @@ export function parseListingsPayload(url: string, json: unknown): RawListing[] |
       sqm: num(it.sqm ?? it.surface ?? it.area),
       ownerName: str(it.ownerName ?? it.contactName ?? (it as any)?.contact?.name),
       ownerPhone: str(it.ownerPhone ?? it.phone ?? (it as any)?.contact?.phone),
+      ownerEmail: str(it.ownerEmail ?? it.email ?? (it as any)?.contact?.email),
       isPrivateOwner: bool(it.isPrivate ?? it.isParticular ?? it.privateOwner) ??
         (str(it.advertiserType ?? it.sellerType)?.toLowerCase().includes("particular") || undefined),
       raw: item,

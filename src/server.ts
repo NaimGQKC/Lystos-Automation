@@ -3,7 +3,7 @@ import type { DB } from "./db/index.js";
 import { logEvent } from "./db/index.js";
 import { env } from "./env.js";
 import { logger } from "./logger.js";
-import { normalizePhone } from "./matching/phone.js";
+import { normalizePhone } from "./matching/contact.js";
 
 /** Explicit unsubscribe intents only — a reply of "no" alone is a lead
  *  disposition for the agent to judge, not an automated opt-out. */
@@ -58,7 +58,7 @@ function handleStatuses(db: DB, value: WebhookValue): void {
     if (!["delivered", "read", "failed"].includes(s.status)) continue;
     db.prepare(
       `UPDATE messages SET status = ?, error = COALESCE(?, error)
-       WHERE wa_message_id = ? AND status IN ('sent', 'delivered')`,
+       WHERE provider_ref = ? AND status IN ('sent', 'delivered')`,
     ).run(s.status, s.errors?.[0]?.title ?? null, s.id);
   }
 }
@@ -69,16 +69,16 @@ function handleInbound(db: DB, value: WebhookValue): void {
     if (!phone) continue;
     const text = m.text?.body ?? "";
     const inserted = db.prepare(
-      "INSERT OR IGNORE INTO inbound (phone_e164, body, wa_message_id) VALUES (?, ?, ?)",
+      "INSERT OR IGNORE INTO inbound (contact_key, body, provider_ref) VALUES (?, ?, ?)",
     ).run(phone, text, m.id).changes;
     if (!inserted) continue; // webhook redelivery
 
     if (isOptOut(text)) {
       db.prepare(
-        "UPDATE contacts SET opted_out = 1, opted_out_at = datetime('now') WHERE phone_e164 = ?",
+        "UPDATE contacts SET opted_out = 1, opted_out_at = datetime('now') WHERE contact_key = ?",
       ).run(phone);
       db.prepare(
-        "UPDATE messages SET status = 'blocked' WHERE phone_e164 = ? AND status = 'pending'",
+        "UPDATE messages SET status = 'blocked' WHERE contact_key = ? AND status = 'pending'",
       ).run(phone);
       logEvent(db, "opt_out", null, { phone });
       logger.info({ phone }, "contact opted out — blocked");

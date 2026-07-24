@@ -1,13 +1,6 @@
 import { env, requireEnv } from "../env.js";
 import type { AgentConfig } from "../config/agent.js";
-
-export interface SendResult {
-  ok: boolean;
-  waMessageId?: string;
-  /** true = worth retrying (network, 429, 5xx); false = permanent (bad number, template rejected) */
-  retryable?: boolean;
-  error?: string;
-}
+import type { SendResult } from "./types.js";
 
 export interface TemplateSend {
   to: string; // E.164
@@ -20,8 +13,8 @@ export interface TemplateSend {
  *  MUST use an approved template — free-form text is only allowed inside the
  *  24h window after the user replies. */
 export async function sendTemplate(agent: AgentConfig, msg: TemplateSend): Promise<SendResult> {
-  const phoneNumberId = requireEnv(agent.whatsapp.phoneNumberIdEnv);
-  const accessToken = requireEnv(agent.whatsapp.accessTokenEnv);
+  const phoneNumberId = requireEnv(agent.whatsapp!.phoneNumberIdEnv);
+  const accessToken = requireEnv(agent.whatsapp!.accessTokenEnv);
   const url = `${env.waGraphBaseUrl}/${env.waGraphVersion}/${phoneNumberId}/messages`;
 
   const body = {
@@ -54,7 +47,7 @@ export async function sendTemplate(agent: AgentConfig, msg: TemplateSend): Promi
   };
 
   if (res.ok && payload.messages?.[0]?.id) {
-    return { ok: true, waMessageId: payload.messages[0].id };
+    return { ok: true, providerRef: payload.messages[0].id };
   }
   return {
     ok: false,

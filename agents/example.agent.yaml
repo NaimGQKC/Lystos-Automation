@@ -4,6 +4,10 @@ id: example
 name: María García — Inmobiliaria Ejemplo
 timezone: Europe/Madrid
 
+# email = write to the owner by email. whatsapp = Meta Cloud API (needs
+# approved templates; not required for the email channel).
+channel: email
+
 lystos:
   # Env vars LYSTOS_EXAMPLE_EMAIL / LYSTOS_EXAMPLE_PASSWORD hold the login.
   credentialsEnvPrefix: LYSTOS_EXAMPLE
@@ -18,33 +22,76 @@ filters:
   propertyTypes: []          # empty = any
   privateOwnerOnly: true
 
-whatsapp:
-  # Meta WhatsApp Cloud API credentials for HER sender number.
-  phoneNumberIdEnv: WA_EXAMPLE_PHONE_NUMBER_ID
-  accessTokenEnv: WA_EXAMPLE_ACCESS_TOKEN
+sending:
+  # Quiet hours and pacing apply to real sends. In draft mode they're skipped
+  # (nobody is contacted), but dailyCap still bounds each review batch.
+  quietHours: { start: "20:30", end: "09:30" }
+  dailyCap: 25
+  minSecondsBetweenSends: 120
+
+email:
+  # draft = write into her Drafts folder for review (SAFE — nothing leaves).
+  # send  = deliver straight to the owner. Flip only when you're confident.
+  mode: draft
+  fromEnv: EMAIL_EXAMPLE_FROM
+  userEnv: EMAIL_EXAMPLE_USER
+  passwordEnv: EMAIL_EXAMPLE_PASSWORD
+  # Gmail: smtp.gmail.com / imap.gmail.com and draftsMailbox "[Gmail]/Drafts".
+  # Outlook: smtp-mail.outlook.com / outlook.office365.com, mailbox "Drafts".
+  smtpHost: smtp.gmail.com
+  smtpPort: 465
+  imapHost: imap.gmail.com
+  imapPort: 993
+  draftsMailbox: "[Gmail]/Drafts"
   templates:
-    # Each entry must exist as an APPROVED template in Meta Business Manager.
-    # `variables` order must match the template's {{1}}, {{2}}, ... slots.
-    # Two variants = automatic A/B test (deterministic 50/50 split by phone).
+    # Two variants = automatic A/B test (deterministic 50/50 split by contact).
+    # No external approval needed — edit these freely.
     - name: first_touch_a
-      metaTemplateName: captacion_saludo_v1
       language: es
-      variables: [ownerName, propertyLabel, zone, agentName]
-      preview: >-
-        Hola {{ownerName}}, he visto tu anuncio del {{propertyLabel}} en
-        {{zone}}. Soy {{agentName}}, agente inmobiliaria de la zona, y tengo
-        compradores buscando activamente. ¿Te interesaría que hablemos?
-        (Responde BAJA para no recibir más mensajes.)
+      subject: "Tu {{propertyLabel}} en {{zone}}"
+      body: |
+        Hola {{ownerName}},
+
+        He visto tu anuncio del {{propertyLabel}} en {{zone}} publicado por
+        {{price}}. Soy {{agentName}}, agente inmobiliaria de la zona, y tengo
+        compradores buscando activamente por allí.
+
+        Si te interesa, puedo pasarte sin compromiso una valoración de lo que
+        se está cerrando ahora mismo en tu calle. ¿Te viene bien que hablemos
+        esta semana?
+
+        Un saludo,
+        {{agentName}}
+
+        —
+        Si prefieres no recibir más mensajes míos, responde BAJA a este correo.
     - name: first_touch_b
-      metaTemplateName: captacion_valoracion_v1
       language: es
-      variables: [ownerName, zone, price, agentName]
-      preview: >-
-        Hola {{ownerName}}, soy {{agentName}}, agente en {{zone}}. He visto tu
-        anuncio publicado por {{price}} y me encantaría contarte cómo están
-        cerrando operaciones similares en tu zona. ¿Hablamos?
-        (Responde BAJA para no recibir más mensajes.)
-  sending:
-    quietHours: { start: "20:30", end: "09:30" }
-    dailyCap: 25
-    minSecondsBetweenSends: 120
+      subject: "¿Sigue disponible tu {{propertyLabel}} en {{zone}}?"
+      body: |
+        Hola {{ownerName}},
+
+        Soy {{agentName}}, agente inmobiliaria en {{zone}}. He visto que has
+        publicado tu {{propertyLabel}} por {{price}} y quería preguntarte si
+        sigue disponible.
+
+        Trabajo con compradores en esta zona y me gustaría contarte cómo están
+        cerrando operaciones parecidas a la tuya. Sin compromiso, por supuesto.
+
+        ¿Hablamos?
+
+        {{agentName}}
+
+        —
+        Si prefieres no recibir más mensajes míos, responde BAJA a este correo.
+
+# Only needed if channel is "whatsapp".
+# whatsapp:
+#   phoneNumberIdEnv: WA_EXAMPLE_PHONE_NUMBER_ID
+#   accessTokenEnv: WA_EXAMPLE_ACCESS_TOKEN
+#   templates:
+#     - name: first_touch_a
+#       metaTemplateName: captacion_saludo_v1
+#       language: es
+#       variables: [ownerName, propertyLabel, zone, agentName]
+#       preview: "Hola {{ownerName}}, he visto tu {{propertyLabel}}…"

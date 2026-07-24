@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS listings (
   sqm           INTEGER,
   owner_name    TEXT,
   owner_phone   TEXT,
+  owner_email   TEXT,
   is_private_owner INTEGER,
   raw           TEXT NOT NULL,
   status        TEXT NOT NULL DEFAULT 'new',   -- new | queued | skipped
@@ -20,12 +21,14 @@ CREATE TABLE IF NOT EXISTS listings (
   first_seen_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Global contact ledger: one row per phone number, across ALL agents.
--- A phone in this table has been claimed for outreach; inserting is how a
--- pipeline run reserves it, so the same owner is never messaged twice even
--- if they relist, change portal, or match two agents' filters.
+-- Global contact ledger: one row per contact, across ALL agents.
+-- contact_key is an E.164 phone or a lowercased email address depending on
+-- the channel. Inserting is how a pipeline run reserves a contact, so the
+-- same owner is never messaged twice even if they relist, change portal, or
+-- match two agents' filters.
 CREATE TABLE IF NOT EXISTS contacts (
-  phone_e164        TEXT PRIMARY KEY,
+  contact_key       TEXT PRIMARY KEY,
+  contact_type      TEXT NOT NULL,             -- phone | email
   first_listing_id  TEXT,
   first_agent_id    TEXT,
   created_at        TEXT NOT NULL DEFAULT (datetime('now')),
@@ -39,29 +42,32 @@ CREATE TABLE IF NOT EXISTS messages (
   id              INTEGER PRIMARY KEY AUTOINCREMENT,
   agent_id        TEXT NOT NULL,
   listing_id      TEXT NOT NULL,
-  phone_e164      TEXT NOT NULL,
-  template_name   TEXT NOT NULL,      -- Meta-approved template name
+  channel         TEXT NOT NULL,      -- email | whatsapp
+  contact_key     TEXT NOT NULL,
+  template_name   TEXT NOT NULL,
   language        TEXT NOT NULL,
-  variables       TEXT NOT NULL,      -- JSON array, ordered as {{1}},{{2}},...
-  preview         TEXT NOT NULL,      -- human-readable rendering for review
+  subject         TEXT,               -- email only
+  variables       TEXT NOT NULL,      -- JSON array (whatsapp {{1}},{{2}}…)
+  preview         TEXT NOT NULL,      -- rendered body / human-readable text
   status          TEXT NOT NULL DEFAULT 'pending',
-                  -- pending | sent | delivered | read | failed | dry_run | blocked
-  wa_message_id   TEXT,
+                  -- pending | drafted | sent | delivered | read | failed
+                  -- | dry_run | blocked
+  provider_ref    TEXT,               -- wa message id, or draft UID
   attempts        INTEGER NOT NULL DEFAULT 0,
   next_attempt_at TEXT NOT NULL DEFAULT (datetime('now')),
   error           TEXT,
   created_at      TEXT NOT NULL DEFAULT (datetime('now')),
   sent_at         TEXT,
-  UNIQUE (agent_id, phone_e164)
+  UNIQUE (agent_id, contact_key)
 );
 
--- Replies and delivery callbacks from the WhatsApp webhook.
+-- Replies and delivery callbacks.
 CREATE TABLE IF NOT EXISTS inbound (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   ts            TEXT NOT NULL DEFAULT (datetime('now')),
-  phone_e164    TEXT NOT NULL,
+  contact_key   TEXT NOT NULL,
   body          TEXT,
-  wa_message_id TEXT UNIQUE
+  provider_ref  TEXT UNIQUE
 );
 
 -- Append-only audit log. Doubles as the GDPR accountability record.

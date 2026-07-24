@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizePhone } from "../src/matching/phone.js";
+import { normalizePhone, normalizeEmail } from "../src/matching/contact.js";
 
 describe("normalizePhone", () => {
   it("normalizes Spanish national formats to E.164", () => {
@@ -18,5 +18,18 @@ describe("normalizePhone", () => {
     expect(normalizePhone("123")).toBeNull();
     expect(normalizePhone("")).toBeNull();
     expect(normalizePhone(undefined)).toBeNull();
+  });
+});
+
+describe("normalizeEmail", () => {
+  it("lowercases and trims valid addresses", () => {
+    expect(normalizeEmail("  Anna@Example.COM ")).toBe("anna@example.com");
+  });
+
+  it("rejects malformed addresses", () => {
+    expect(normalizeEmail("not-an-email")).toBeNull();
+    expect(normalizeEmail("a@b")).toBeNull();
+    expect(normalizeEmail("a b@c.com")).toBeNull();
+    expect(normalizeEmail(undefined)).toBeNull();
   });
 });

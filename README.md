@@ -1,9 +1,14 @@
 # Lystos Automation
 
-Auto-sends a first-touch WhatsApp message to private owners ("particulares")
-the moment their property listing appears in a real-estate agent's Lystos
-feed. Multi-agent by design: onboarding another agent is one YAML file plus
-env vars — no code changes.
+Auto-writes a first-touch message to private owners ("particulares") the
+moment their property listing appears in a real-estate agent's Lystos feed.
+Multi-agent by design: onboarding another agent is one YAML file plus env
+vars — no code changes.
+
+**Channels:** `email` (default — drafts for review, or direct send) or
+`whatsapp` (Meta Cloud API, needs approved templates).
+
+**New here? Start with [QUICKSTART-LOCAL.md](QUICKSTART-LOCAL.md).**
 
 See [DESIGN.md](DESIGN.md) for the full architecture and rationale.
 
@@ -12,10 +17,19 @@ Lystos (agent's account, Playwright) ──▶ ingest ──▶ filters ──�
                                                                 ledger (dedupe,
                                                                 opt-outs)
                                                                       │
-WhatsApp Cloud API ◀── worker (quiet hours, daily cap, pacing, ◀── outbox
-        │                       retries, DRY RUN by default)
+   email drafts / SMTP / WhatsApp ◀── worker (quiet hours, daily cap, ◀── outbox
+        │                                     pacing, retries,
+        │                                     DRY RUN by default)
         └──▶ webhook server: delivery statuses, replies, instant opt-out
 ```
+
+### Safety ladder
+
+| Setting | What happens |
+| :-- | :-- |
+| `DRY_RUN=true` (default) | Messages rendered into the DB. Nothing contacted. |
+| `DRY_RUN=false` + `mode: draft` | Drafts appear in her mailbox for review. Nothing sent. |
+| `DRY_RUN=false` + `mode: send` | Emails delivered to owners automatically. |
 
 ## Commands
 
@@ -27,7 +41,7 @@ WhatsApp Cloud API ◀── worker (quiet hours, daily cap, pacing, ◀── o
 | `npm run capture -- <agent>` | Calibration: records the Lystos app's network traffic + DOM to `data/capture/`. |
 | `npm run report` | Pipeline state, message previews, latest replies. |
 | `npm test` | Test suite (pipeline idempotency, dedupe, scheduling, webhook, opt-outs). |
-| `npm run smoke` | Full end-to-end rehearsal: real browser scraper + pipeline + live-mode sender + webhooks against built-in fake Lystos/Meta servers. No credentials needed. |
+| `npm run smoke` | Full end-to-end rehearsal against a built-in fake Lystos: real browser scraper + pipeline + draft creation. Prints a sample draft. No credentials needed. |
 
 Append an agent id to `ingest`/`worker`/`capture` to target one agent.
 
@@ -65,25 +79,41 @@ The scraper intercepts the JSON the Lystos SPA fetches for its own UI rather
 than scraping the DOM, so it survives visual redesigns; only genuine API
 changes require re-calibration.
 
-### 3. WhatsApp Business Cloud API (per agent)
+### 3. Email channel (default)
+
+Put her mailbox credentials in `.env` under the names her YAML references
+(`EMAIL_<AGENT>_FROM` / `_USER` / `_PASSWORD`). Gmail and Outlook accounts
+with 2FA need an **app password** for IMAP/SMTP.
+
+Set `smtpHost` / `imapHost` / `draftsMailbox` in the YAML for her provider:
+
+| Provider | SMTP | IMAP | Drafts mailbox |
+| :-- | :-- | :-- | :-- |
+| Gmail | smtp.gmail.com | imap.gmail.com | `[Gmail]/Drafts` |
+| Outlook 365 | smtp-mail.outlook.com | outlook.office365.com | `Drafts` |
+
+Templates live in the YAML and need no external approval — edit them freely.
+
+### 3b. WhatsApp Cloud API (only if `channel: whatsapp`)
 
 1. Meta Business Manager → WhatsApp → add a **dedicated** sender number
    (never automate a personal WhatsApp — numbers get banned).
-2. Create the message templates and submit for approval. Each template in the
-   agent YAML must match an approved template's name, language and `{{n}}`
+2. Create the templates and submit for approval. Each template in the agent
+   YAML must match an approved template's name, language and `{{n}}`
    parameter count/order. Include an opt-out line ("Responde BAJA…").
 3. Put the phone-number id and a permanent access token in `.env`.
-4. Point the webhook to `https://<your-host>/webhooks/whatsapp` with your
+4. Point the webhook at `https://<your-host>/webhooks/whatsapp` with your
    `WA_VERIFY_TOKEN`, subscribed to `messages`.
 
 ### 4. Go live — in stages
 
 1. Run `ingest` (cron) + `worker` with `DRY_RUN=true` for a few days.
 2. Review `npm run report` with the agent: are the right listings matched?
-   Do the previews read well?
-3. Set `DRY_RUN=false`. Caps start conservative (25/day, ≥2 min between
-   sends, no sends 20:30–09:30) — raise them slowly as the number builds
-   sending reputation with Meta.
+   Do the messages read well?
+3. Set `DRY_RUN=false` with `mode: draft` — real drafts land in her mailbox
+   for review. Watch a batch with her.
+4. Only then consider `mode: send`. Caps start conservative (25/day, ≥2 min
+   apart, nothing 20:30–09:30) — raise them slowly.
 
 ### Deploy
 
@@ -101,19 +131,21 @@ the schema in `src/db/schema.sql` ports directly.
 
 1. `cp agents/example.agent.yaml agents/<id>.agent.yaml` and edit zones,
    price band, templates, caps.
-2. Add her Lystos credentials + WhatsApp credentials to `.env` under the
-   names the YAML references.
+2. Add her Lystos credentials + mailbox (or WhatsApp) credentials to `.env`
+   under the names the YAML references.
 3. Calibrate step 2.2 (just the searchUrl; selectors are shared), dry-run,
    then go live.
 
 ## Compliance (Spain)
 
 - Business-initiated WhatsApp messages **must** use Meta-approved templates.
+  The email channel has no such constraint, but the same rules apply: identify
+  the agent honestly and make opting out easy.
 - Every template includes an opt-out instruction; a reply matching
   BAJA/STOP/"no me contactes" **instantly and permanently** blocks the
   contact (`contacts.opted_out`) and cancels pending messages.
-- The global contact ledger guarantees one first-touch per phone number,
-  ever — across relistings and across agents.
+- The global contact ledger guarantees one first-touch per contact (email or
+  phone), ever — across relistings and across agents.
 - `events` is an append-only audit log of every queued/sent/failed message
   and opt-out: your GDPR accountability record.
 - Identify the agent honestly in message one. No sends during quiet hours.

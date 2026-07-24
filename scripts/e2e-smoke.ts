@@ -29,20 +29,20 @@ const FEED = {
       id: 98211, title: "Piso en Carrer de Verdi", price: 385000,
       neighborhood: "Gràcia", municipality: "Barcelona", propertyType: "flat",
       rooms: 3, surface: 85, advertiserType: "particular",
-      contact: { name: "Anna", phone: "612 345 678" },
+      contact: { name: "Anna", phone: "612 345 678", email: "anna@example.com" },
       url: "https://app.lystos.com/listing/98211",
     },
     {
       id: 98212, title: "Ático en Passeig de Gràcia", price: 890000, // over budget
       neighborhood: "Eixample", municipality: "Barcelona", propertyType: "flat",
       rooms: 4, surface: 120, advertiserType: "particular",
-      contact: { name: "Jordi", phone: "622 111 222" },
+      contact: { name: "Jordi", phone: "622 111 222", email: "jordi@example.com" },
     },
     {
       id: 98213, title: "Piso en Sants", price: 310000, // agency, not particular
       neighborhood: "Sants", municipality: "Barcelona", propertyType: "flat",
       rooms: 2, surface: 70, advertiserType: "agency",
-      contact: { name: "Inmo XYZ", phone: "933 000 000" },
+      contact: { name: "Inmo XYZ", phone: "933 000 000", email: "info@inmoxyz.es" },
     },
   ],
 };
@@ -71,50 +71,38 @@ function fakeLystos(): Promise<{ server: Server; url: string }> {
   );
 }
 
-// ---------- fake Meta Graph API ----------
-function fakeMeta(received: unknown[]): Promise<{ server: Server; url: string }> {
-  const server = createServer((req, res) => {
-    let body = "";
-    req.on("data", (c) => (body += c));
-    req.on("end", () => {
-      received.push({ url: req.url, body: JSON.parse(body) });
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify({ messages: [{ id: `wamid.smoke.${received.length}` }] }));
-    });
-  });
-  return new Promise((resolve) =>
-    server.listen(0, "127.0.0.1", () =>
-      resolve({ server, url: `http://127.0.0.1:${(server.address() as AddressInfo).port}` }),
-    ),
-  );
-}
-
 async function main() {
   const lystos = await fakeLystos();
-  const metaCalls: any[] = [];
-  const meta = await fakeMeta(metaCalls);
-
-  process.env.WA_SMOKE_PHONE_ID = "555000111";
-  process.env.WA_SMOKE_TOKEN = "smoke-token";
-  process.env.WA_GRAPH_BASE_URL = meta.url; // read lazily? no — env.ts already loaded; patch below
   const { env } = await import("../src/env.js");
-  (env as any).waGraphBaseUrl = meta.url;
   (env as any).dataDir = "data/smoke";
 
   const agent = AgentConfigSchema.parse({
     id: "smoke",
     name: "Agente de Prueba",
+    channel: "email",
     lystos: { credentialsEnvPrefix: "LYSTOS_SMOKE", searchUrl: `${lystos.url}/search` },
     filters: { zones: ["Gràcia"], priceMin: 100000, priceMax: 600000, privateOwnerOnly: true },
-    whatsapp: {
-      phoneNumberIdEnv: "WA_SMOKE_PHONE_ID",
-      accessTokenEnv: "WA_SMOKE_TOKEN",
+    sending: { quietHours: { start: "00:00", end: "00:00" }, dailyCap: 50, minSecondsBetweenSends: 1 },
+    email: {
+      mode: "draft",
+      fromEnv: "EMAIL_SMOKE_FROM",
+      userEnv: "EMAIL_SMOKE_USER",
+      passwordEnv: "EMAIL_SMOKE_PASSWORD",
+      smtpHost: "smtp.example", imapHost: "imap.example", draftsMailbox: "Drafts",
       templates: [{
-        name: "smoke_a", metaTemplateName: "captacion_saludo_v1", language: "es",
-        variables: ["ownerName", "propertyLabel", "zone", "agentName"],
-        preview: "Hola {{ownerName}}, he visto tu {{propertyLabel}} en {{zone}} — {{agentName}}",
+        name: "smoke_a", language: "es",
+        subject: "Tu {{propertyLabel}} en {{zone}}",
+        body: [
+          "Hola {{ownerName}},",
+          "",
+          "He visto tu anuncio del {{propertyLabel}} en {{zone}} publicado por {{price}}.",
+          "Soy {{agentName}} y tengo compradores buscando en la zona. ¿Hablamos?",
+          "",
+          "{{agentName}}",
+          "—",
+          "Responde BAJA si prefieres no recibir más mensajes.",
+        ].join("\n"),
       }],
-      sending: { quietHours: { start: "00:00", end: "00:00" }, dailyCap: 50, minSecondsBetweenSends: 1 },
     },
   });
 
@@ -139,42 +127,41 @@ async function main() {
   assert.equal(again.new + again.queued, 0);
   ok("second ingestion pass queued nothing (idempotent)");
 
-  // 3) Worker in LIVE mode → fake Meta.
-  await new Promise((r) => setTimeout(r, 1100)); // respect 1s pacing
-  const outcome = await processAgentQueue(db, agent, { dryRun: false });
-  assert.equal(outcome, "sent");
-  assert.equal(metaCalls.length, 1);
-  const sent = metaCalls[0].body;
-  assert.equal(sent.to, "34612345678");
-  assert.equal(sent.template.name, "captacion_saludo_v1");
-  assert.deepEqual(
-    sent.template.components[0].parameters.map((p: any) => p.text),
-    ["Anna", "flat de 3 hab., 85 m²", "Gràcia", "Agente de Prueba"],
-  );
-  ok(`worker sent a real HTTP template message to the (mock) Meta API: to=+34612345678, template=captacion_saludo_v1`);
+  // 3) Worker in LIVE draft mode — capture what would land in her Drafts.
+  const drafts: any[] = [];
+  const outcome = await processAgentQueue(db, agent, {
+    dryRun: false,
+    deliver: async (_a, m) => { drafts.push(m); return { ok: true, providerRef: `uid-${drafts.length}` }; },
+  });
+  assert.equal(outcome, "drafted");
+  assert.equal(drafts.length, 1);
+  assert.equal(drafts[0].to, "anna@example.com");
+  assert.equal(drafts[0].subject, "Tu flat de 3 hab., 85 m² en Gràcia");
+  assert.ok(drafts[0].body.includes("Hola Anna"));
+  assert.ok(drafts[0].body.includes("385.000 €"));
+  ok("worker created an email DRAFT addressed to the owner (nothing sent)");
+  assert.equal((db.prepare("SELECT status FROM messages").get() as any).status, "drafted");
 
   // 4) Delivery status + opt-out via the real webhook server.
   const app = buildServer(db);
+  db.prepare("INSERT INTO contacts (contact_key, contact_type) VALUES ('+34699888777','phone')").run();
   await app.inject({
     method: "POST", url: "/webhooks/whatsapp",
-    payload: { entry: [{ changes: [{ value: { statuses: [{ id: "wamid.smoke.1", status: "delivered" }] } }] }] },
+    payload: { entry: [{ changes: [{ value: { messages: [{ id: "in.1", from: "34699888777", text: { body: "BAJA" } }] } }] }] },
   });
-  assert.equal((db.prepare("SELECT status FROM messages").get() as any).status, "delivered");
-  ok("delivery-status webhook marked the message delivered");
-
-  await app.inject({
-    method: "POST", url: "/webhooks/whatsapp",
-    payload: { entry: [{ changes: [{ value: { messages: [{ id: "wamid.in.1", from: "34612345678", text: { body: "BAJA" } }] } }] }] },
-  });
-  assert.equal((db.prepare("SELECT opted_out FROM contacts").get() as any).opted_out, 1);
+  assert.equal(
+    (db.prepare("SELECT opted_out FROM contacts WHERE contact_key = '+34699888777'").get() as any).opted_out, 1,
+  );
   ok("opt-out reply (BAJA) hard-blocked the contact");
 
   console.log("\nE2E SMOKE TEST — all stages passed:\n" + steps.join("\n"));
   console.log("\n--- report ---\n" + report(db));
 
+  console.log("\n--- the draft that would appear in her Drafts folder ---");
+  console.log(`To: ${drafts[0].to}\nSubject: ${drafts[0].subject}\n\n${drafts[0].body}`);
+
   await app.close();
   lystos.server.close();
-  meta.server.close();
 }
 
 main().catch((err) => {
