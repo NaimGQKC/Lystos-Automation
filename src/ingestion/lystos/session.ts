@@ -27,6 +27,7 @@ export class LystosSession {
       this.browser = await chromium.launch({
         headless: this.opts.headless ?? true,
         executablePath: env.chromiumPath,
+        proxy: env.proxyServer ? { server: env.proxyServer } : undefined,
       });
     }
     if (!this.context) {

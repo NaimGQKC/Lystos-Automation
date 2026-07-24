@@ -15,6 +15,10 @@ export const env = {
   /** Explicit Chromium binary for playwright (optional; used when the
    *  installed playwright version doesn't match the system browsers). */
   chromiumPath: process.env.CHROMIUM_PATH || undefined,
+  /** Optional upstream proxy for the Lystos browser session, e.g. a Spanish
+   *  residential/rotating IP. Datacenter IPs get reset by Lystos's CDN.
+   *  Format: http://user:pass@host:port */
+  proxyServer: process.env.PROXY_SERVER || undefined,
   /** Worker loop tick in seconds (per-agent pacing is enforced on top). */
   workerTickSeconds: Number(process.env.WORKER_TICK_SECONDS ?? 20),
 };
