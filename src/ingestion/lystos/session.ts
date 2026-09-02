@@ -4,11 +4,16 @@ import { join } from "node:path";
 import type { AgentConfig } from "../../config/agent.js";
 import { env, requireEnv } from "../../env.js";
 import { logger } from "../../logger.js";
-import { LYSTOS } from "./selectors.js";
+import { LYSTOS, isAuthPage } from "./selectors.js";
 
 /** Manages an authenticated browser session against app.lystos.com.
- *  Login state (cookies/localStorage) is persisted per agent so we log in
- *  rarely — repeated logins are both slow and a bot-detection signal. */
+ *
+ *  Auth is Keycloak (OpenID Connect) at account.lystos.com. Whether we're
+ *  logged in is decided by which host we end up on — far more reliable than
+ *  probing for some element in the app's UI.
+ *
+ *  Login state is persisted per agent so we log in rarely: repeated logins
+ *  are slow and look like a bot. */
 export class LystosSession {
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
@@ -43,26 +48,46 @@ export class LystosSession {
 
   private async ensureLoggedIn(page: Page): Promise<void> {
     await page.goto(this.agent.lystos.searchUrl, { waitUntil: "domcontentloaded" });
-    const probe = page.locator(LYSTOS.loggedInProbe).first();
-    if (await probe.isVisible({ timeout: 5_000 }).catch(() => false)) return;
+    // A saved session lands us straight in the app; otherwise Keycloak
+    // intercepts and we're sitting on the auth host.
+    if (!isAuthPage(page.url())) return;
 
     logger.info({ agent: this.agent.id }, "no valid session, logging in to Lystos");
     const prefix = this.agent.lystos.credentialsEnvPrefix;
-    await page.goto(LYSTOS.loginUrl, { waitUntil: "domcontentloaded" });
-    await page.fill(LYSTOS.login.email, requireEnv(`${prefix}_EMAIL`));
-    await page.fill(LYSTOS.login.password, requireEnv(`${prefix}_PASSWORD`));
-    await page.click(LYSTOS.login.submit);
-    await page.waitForLoadState("networkidle");
 
-    await page.goto(this.agent.lystos.searchUrl, { waitUntil: "domcontentloaded" });
-    if (!(await probe.isVisible({ timeout: 10_000 }).catch(() => false))) {
+    await page.waitForSelector(LYSTOS.login.username, { timeout: 30_000 });
+    await page.fill(LYSTOS.login.username, requireEnv(`${prefix}_EMAIL`));
+    await page.fill(LYSTOS.login.password, requireEnv(`${prefix}_PASSWORD`));
+
+    // Longer-lived session = fewer logins later.
+    const remember = page.locator(LYSTOS.login.rememberMe);
+    if (await remember.isVisible().catch(() => false)) {
+      await remember.check().catch(() => {});
+    }
+
+    await page.click(LYSTOS.login.submit);
+    await page
+      .waitForURL((u) => !isAuthPage(u.toString()), { timeout: 60_000 })
+      .catch(() => {}); // fall through to the explicit check below
+
+    if (isAuthPage(page.url())) {
+      const message = await page
+        .locator(LYSTOS.login.error)
+        .first()
+        .textContent({ timeout: 2_000 })
+        .catch(() => null);
       throw new Error(
-        `Lystos login for agent "${this.agent.id}" did not reach an authenticated page. ` +
-          `Selectors likely need calibration — run: npm run capture -- ${this.agent.id}`,
+        `Lystos login failed for agent "${this.agent.id}" — still on the auth page.` +
+          (message ? ` Lystos says: "${message.trim()}"` : "") +
+          " Check the credentials in .env; if they're right, the account may" +
+          " require a second factor or a consent step that needs handling.",
       );
     }
+
+    // Land on the target page and let the SPA finish booting.
+    await page.goto(this.agent.lystos.searchUrl, { waitUntil: "networkidle" });
     await page.context().storageState({ path: this.statePath });
-    logger.info({ agent: this.agent.id }, "session saved");
+    logger.info({ agent: this.agent.id, url: page.url() }, "logged in; session saved");
   }
 
   async close(): Promise<void> {
