@@ -48,8 +48,14 @@ export class LystosSession {
 
   private async ensureLoggedIn(page: Page): Promise<void> {
     await page.goto(this.agent.lystos.searchUrl, { waitUntil: "domcontentloaded" });
-    // A saved session lands us straight in the app; otherwise Keycloak
-    // intercepts and we're sitting on the auth host.
+    // The redirect to Keycloak is client-side: the app boots first, THEN
+    // bounces to the auth host. Checking the URL immediately after goto would
+    // wrongly conclude we're logged in, so give the redirect a chance to fire.
+    if (!isAuthPage(page.url())) {
+      await page
+        .waitForURL((u) => isAuthPage(u.toString()), { timeout: 8_000 })
+        .catch(() => {}); // no redirect = the saved session is still good
+    }
     if (!isAuthPage(page.url())) return;
 
     logger.info({ agent: this.agent.id }, "no valid session, logging in to Lystos");

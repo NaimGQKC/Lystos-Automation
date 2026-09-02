@@ -20,7 +20,7 @@ export async function capture(agent: AgentConfig): Promise<void> {
   mkdirSync(dir, { recursive: true });
   const headful = process.env.HEADFUL === "1";
   const session = new LystosSession(agent, { headless: !headful });
-  const index: { file: string; url: string; status: number; bytes: number }[] = [];
+  const index: { file: string; url: string; method: string; status: number; bytes: number }[] = [];
 
   try {
     const page = await session.page();
@@ -29,11 +29,31 @@ export async function capture(agent: AgentConfig): Promise<void> {
       const ct = response.headers()["content-type"] ?? "";
       if (!ct.includes("json")) return;
       const file = `${String(++n).padStart(3, "0")}.json`;
+      const request = response.request();
       response
         .text()
         .then((body) => {
-          writeFileSync(join(dir, file), JSON.stringify({ url: response.url(), body: safeParse(body) }, null, 2));
-          index.push({ file, url: response.url(), status: response.status(), bytes: body.length });
+          writeFileSync(
+            join(dir, file),
+            JSON.stringify(
+              {
+                url: response.url(),
+                method: request.method(),
+                // The query/filter payload — this is what lets us call the
+                // API directly instead of driving the UI.
+                requestBody: safeParse(request.postData() ?? ""),
+                requestHeaders: redactHeaders(request.headers()),
+                status: response.status(),
+                body: safeParse(body),
+              },
+              null,
+              2,
+            ),
+          );
+          index.push({
+            file, url: response.url(), method: request.method(),
+            status: response.status(), bytes: body.length,
+          });
         })
         .catch(() => {});
     });
@@ -59,7 +79,12 @@ export async function capture(agent: AgentConfig): Promise<void> {
       );
       const until = Date.now() + BROWSE_SECONDS * 1_000;
       while (Date.now() < until && !page.isClosed()) {
-        await page.waitForTimeout(2_000);
+        // Closing the window yourself is a normal way to end the session.
+        try {
+          await page.waitForTimeout(2_000);
+        } catch {
+          break;
+        }
       }
     } else {
       for (let i = 0; i < 5; i++) {
@@ -77,7 +102,7 @@ export async function capture(agent: AgentConfig): Promise<void> {
     logger.info({ dir, responses: index.length }, "capture complete");
     // Biggest payloads first — the listing feed is nearly always among them.
     for (const e of [...index].sort((a, b) => b.bytes - a.bytes).slice(0, 25)) {
-      logger.info(`  ${e.file}  ${e.status}  ${(e.bytes / 1024).toFixed(1)}kB  ${e.url}`);
+      logger.info(`  ${e.file}  ${e.method} ${e.status}  ${(e.bytes / 1024).toFixed(1)}kB  ${e.url}`);
     }
     logger.info(
       "Next: open the largest files above, find the one listing properties, and " +
@@ -86,6 +111,16 @@ export async function capture(agent: AgentConfig): Promise<void> {
   } finally {
     await session.close();
   }
+}
+
+/** Keep header shapes (useful for replaying the API) without storing secrets. */
+function redactHeaders(headers: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers)) {
+    const key = k.toLowerCase();
+    out[k] = key === "authorization" || key === "cookie" ? `<redacted, ${v.length} chars>` : v;
+  }
+  return out;
 }
 
 function safeParse(body: string): unknown {

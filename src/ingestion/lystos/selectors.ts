@@ -23,9 +23,13 @@ export const LYSTOS = {
     error: "#input-error, .alert-error, .pf-c-alert__title",
   },
 
-  /** Substrings of XHR/fetch URLs that carry listing data. Broad on purpose:
-   *  narrow these only once a capture shows the real feed endpoint. */
-  listingApiPatterns: ["listing", "anuncio", "search", "capta", "explora", "propert"],
+  /** Substrings of XHR/fetch URLs that carry listing data. Confirmed from a
+   *  live capture: the app's own backend is services.lystos.com.
+   *    /catalog/v1/listings/views/explorer  → the listing feed (the one we want)
+   *    /account/v1/alerts/views/grouped     → the agent's configured alerts
+   *  "coordinates" is deliberately excluded: it's map-pin data with no
+   *  contact details. */
+  listingApiPatterns: ["catalog/v1/listings/views/explorer", "account/v1/alerts/views/grouped"],
 } as const;
 
 /** True when the given URL belongs to the auth server rather than the app. */
