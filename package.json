@@ -12,7 +12,8 @@
     "capture": "tsx src/index.ts capture",
     "report": "tsx src/index.ts report",
     "smoke": "tsx scripts/e2e-smoke.ts",
-    "probe": "tsx scripts/probe-login.ts"
+    "probe": "tsx scripts/probe-login.ts",
+    "inspect": "tsx scripts/inspect-capture.ts"
   },
   "repository": {
     "type": "git",
