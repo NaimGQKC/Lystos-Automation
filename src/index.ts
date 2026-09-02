@@ -5,6 +5,7 @@ import { loadAgents } from "./config/agent.js";
 import { ingest } from "./pipeline.js";
 import { LystosScraper } from "./ingestion/lystos/scraper.js";
 import { capture } from "./ingestion/lystos/capture.js";
+import { login } from "./ingestion/lystos/login.js";
 import { processAgentQueue } from "./sender/worker.js";
 import { buildServer } from "./server.js";
 import { report } from "./report.js";
@@ -58,6 +59,12 @@ async function main(): Promise<void> {
       break;
     }
 
+    case "login": {
+      // One supervised sign-in; every later run reuses the saved session.
+      for (const agent of await agentsFor(arg)) await login(agent);
+      break;
+    }
+
     case "capture": {
       for (const agent of await agentsFor(arg)) await capture(agent);
       break;
@@ -72,6 +79,7 @@ async function main(): Promise<void> {
       console.log(
         [
           "Usage: tsx src/index.ts <command> [agent-id]",
+          "  login [agent]    sign in once, by hand, and save the session",
           "  ingest [agent]   scrape Lystos, match, queue first-touch messages",
           "  worker [agent]   run the send loop (DRY_RUN=false to send for real)",
           "  serve            WhatsApp webhook server (statuses, replies, opt-outs)",

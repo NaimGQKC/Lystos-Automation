@@ -23,6 +23,19 @@ export const LYSTOS = {
     error: "#input-error, .alert-error, .pf-c-alert__title",
   },
 
+  /** Lystos caps how many devices may be signed in at once, and every fresh
+   *  login consumes a slot. Detected so we can stop rather than burn more.
+   *  We never click "cerrar todas las sesiones" ourselves — that would sign
+   *  the agent out of her own phone and laptop. */
+  deviceLimit: {
+    textPatterns: [
+      "límite de dispositivos",
+      "dispositivos activos",
+      "cierra todas las sesiones",
+      "active devices",
+    ],
+  },
+
   /** Substrings of XHR/fetch URLs that carry listing data. Confirmed from a
    *  live capture: the app's own backend is services.lystos.com.
    *    /catalog/v1/listings/views/explorer  → the listing feed (the one we want)

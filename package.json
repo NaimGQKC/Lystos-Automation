@@ -13,7 +13,8 @@
     "report": "tsx src/index.ts report",
     "smoke": "tsx scripts/e2e-smoke.ts",
     "probe": "tsx scripts/probe-login.ts",
-    "inspect": "tsx scripts/inspect-capture.ts"
+    "inspect": "tsx scripts/inspect-capture.ts",
+    "login": "tsx src/index.ts login"
   },
   "repository": {
     "type": "git",

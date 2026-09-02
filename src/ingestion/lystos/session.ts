@@ -130,10 +130,39 @@ export class LystosSession {
       );
     }
 
+    await this.assertNotDeviceLimited(page);
+
     // Land on the target page and let the SPA finish booting.
     await this.goto(page, this.agent.lystos.searchUrl);
-    await page.context().storageState({ path: this.statePath });
+    await this.assertNotDeviceLimited(page);
+    await this.saveState(page);
     logger.info({ agent: this.agent.id, url: page.url() }, "logged in; session saved");
+  }
+
+  /** Lystos allows only so many signed-in devices. Hitting that wall is not
+   *  something to retry through: every attempt consumes another slot. */
+  private async assertNotDeviceLimited(page: Page): Promise<void> {
+    const body = (await page.textContent("body").catch(() => "")) ?? "";
+    const hay = body.toLowerCase();
+    if (!LYSTOS.deviceLimit.textPatterns.some((p) => hay.includes(p))) return;
+
+    await this.dumpFailure(page, "device-limit");
+    throw new Error(
+      "Lystos says the account has too many active devices.\n" +
+        "  This is a session limit, not a ban or a block.\n" +
+        "  Fix: open Lystos in a normal browser, click 'Cerrar todas las sesiones',\n" +
+        "  sign in once, then run `npm run login` here to hand this tool its own\n" +
+        "  saved session. After that it reuses that session instead of signing in\n" +
+        "  again on every run.\n" +
+        "  (Deliberately not clicking it automatically — that would sign the agent\n" +
+        "  out of her own phone and laptop.)",
+    );
+  }
+
+  /** Persist cookies + storage so the next run reuses this session rather
+   *  than signing in again and consuming another device slot. */
+  async saveState(page: Page): Promise<void> {
+    await page.context().storageState({ path: this.statePath });
   }
 
   /** Save a screenshot + HTML when login goes wrong; guessing from a stack

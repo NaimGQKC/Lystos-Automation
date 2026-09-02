@@ -33,20 +33,40 @@ to configure.
 
 Gmail/Outlook with 2FA need an **app password**, not the account password.
 
-## 3. Watch it log in
+## 3. Sign in — ONCE
+
+**Lystos limits how many devices can be signed in at once, and every
+sign-in uses up a slot.** So this tool signs in a single time, by hand, and
+reuses that session forever after.
+
+```powershell
+npm run login
+```
+
+A browser window opens. Sign in there yourself, exactly as you normally
+would (including any "cerrar todas las sesiones" prompt or 2FA). As soon as
+you reach the app, the session is saved to `data\state\` and the window can
+be closed.
+
+If you ever see *"Has sobrepasado el límite de dispositivos activos"*: open
+Lystos in your normal browser, click **Cerrar todas las sesiones**, sign in
+again, then re-run `npm run login`. The tool never clicks that button
+itself — it would sign the agent out of her own phone and laptop.
+
+## 4. Grab the feed
 
 ```powershell
 $env:HEADFUL=1
 npm run capture
 ```
 
-Chrome opens, logs into Lystos, loads the particulares feed, and saves
-everything it sees to `data\capture\default\`.
+Reuses the saved session — no new sign-in — loads the particulares feed and
+saves everything to `data\capture\default\`.
 
-If login fails, open `data\capture\default\page.png` — that screenshot shows
+If anything fails, a screenshot lands in that same folder showing exactly
 where it stopped.
 
-## 4. See what it would send
+## 5. See what it would send
 
 ```powershell
 npm run ingest
@@ -60,7 +80,7 @@ Listings where no owner email was found are **not** dropped: they appear
 under "Needs a human" with the owner's phone and the listing link, so they
 can be picked up manually.
 
-## 5. Create real drafts
+## 6. Create real drafts
 
 When the report looks right, set `DRY_RUN=false` in `.env`, then:
 
@@ -71,7 +91,7 @@ npm run worker
 Drafts appear in her Drafts folder, addressed to owners, ready for her to
 review and send. Ctrl-C to stop.
 
-## 6. Later: fully automatic
+## 7. Later: fully automatic
 
 Add `EMAIL_MODE=send` to `.env`. Same pipeline, no drafts — emails go
 straight out, respecting the daily cap, pacing, and quiet hours.

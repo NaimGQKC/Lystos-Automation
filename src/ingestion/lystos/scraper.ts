@@ -53,6 +53,9 @@ export class LystosScraper implements IngestionSource {
             `(run: npm run capture -- ${this.agent.id})`,
         );
       }
+      // Keep the saved session fresh so we don't have to sign in again
+      // (each sign-in consumes one of the account's device slots).
+      await session.saveState(page).catch(() => {});
       return [...byId.values()];
     } finally {
       await session.close();

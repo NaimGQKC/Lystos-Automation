@@ -43,6 +43,7 @@ Lystos (agent's account, Playwright) ──▶ ingest ──▶ filters ──�
 | `npm run ingest` | One scrape pass: pull new listings, match, queue messages. Run from cron every few minutes. |
 | `npm run worker` | Long-running send loop. **Dry-run by default** — set `DRY_RUN=false` to send. |
 | `npm run serve` | Webhook server for WhatsApp delivery statuses, replies and opt-outs. |
+| `npm run login` | Sign in once, by hand, and save the session. Lystos limits active devices, so the tool reuses this rather than signing in per run. |
 | `npm run capture -- <agent>` | Calibration: records the Lystos app's network traffic + DOM to `data/capture/`. |
 | `npm run report` | Pipeline state, message previews, latest replies. |
 | `npm test` | Test suite (pipeline idempotency, dedupe, scheduling, webhook, opt-outs). |

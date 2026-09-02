@@ -97,6 +97,7 @@ export async function capture(agent: AgentConfig): Promise<void> {
       writeFileSync(join(dir, "page.html"), await page.content());
       await page.screenshot({ path: join(dir, "page.png"), fullPage: true }).catch(() => {});
     }
+    if (!page.isClosed()) await session.saveState(page).catch(() => {});
     writeFileSync(join(dir, "_index.json"), JSON.stringify(index, null, 2));
 
     logger.info({ dir, responses: index.length }, "capture complete");
