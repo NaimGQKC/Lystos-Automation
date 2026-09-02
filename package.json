@@ -11,7 +11,8 @@
     "serve": "tsx src/index.ts serve",
     "capture": "tsx src/index.ts capture",
     "report": "tsx src/index.ts report",
-    "smoke": "tsx scripts/e2e-smoke.ts"
+    "smoke": "tsx scripts/e2e-smoke.ts",
+    "probe": "tsx scripts/probe-login.ts"
   },
   "repository": {
     "type": "git",
