@@ -32,7 +32,17 @@ export const LYSTOS = {
   listingApiPatterns: ["catalog/v1/listings/views/explorer", "account/v1/alerts/views/grouped"],
 } as const;
 
-/** True when the given URL belongs to the auth server rather than the app. */
+/** True when we are NOT inside the app yet.
+ *
+ *  Two distinct pages mean "not logged in":
+ *    1. account.lystos.com — the Keycloak form itself
+ *    2. app.lystos.com/login?ref=… — Lystos's own gate, shown briefly before
+ *       it bounces to Keycloak. Missing this was why login got skipped.
+ *
+ *  The exception is the post-login callback (app.lystos.com/login#code=…),
+ *  which IS a logged-in state mid-handshake. */
 export function isAuthPage(url: string): boolean {
-  return LYSTOS.authHostPatterns.some((p) => url.includes(p));
+  if (LYSTOS.authHostPatterns.some((p) => url.includes(p))) return true;
+  if (/\/login\b/.test(url) && !url.includes("code=")) return true;
+  return false;
 }

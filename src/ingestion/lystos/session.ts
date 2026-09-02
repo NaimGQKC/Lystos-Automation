@@ -1,5 +1,5 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentConfig } from "../../config/agent.js";
 import { env, requireEnv } from "../../env.js";
@@ -79,10 +79,22 @@ export class LystosSession {
     }
     if (!isAuthPage(page.url())) return;
 
-    logger.info({ agent: this.agent.id }, "no valid session, logging in to Lystos");
+    logger.info({ agent: this.agent.id, at: page.url() }, "no valid session, logging in to Lystos");
     const prefix = this.agent.lystos.credentialsEnvPrefix;
 
-    await page.waitForSelector(LYSTOS.login.username, { timeout: 30_000 });
+    // We may be on Lystos's own /login gate, which bounces to Keycloak a
+    // moment later — so wait for the form itself rather than for a URL.
+    try {
+      await page.waitForSelector(LYSTOS.login.username, { timeout: 45_000, state: "visible" });
+    } catch {
+      await this.dumpFailure(page, "no-login-form");
+      throw new Error(
+        `Never reached the Lystos login form (stuck at ${page.url()}). ` +
+          `A screenshot is in ${join(env.dataDir, "capture", this.agent.id)}. ` +
+          "If the page looks logged in already, the saved session may be stale — " +
+          `delete ${this.statePath} and retry.`,
+      );
+    }
     await jitter(1_200); // a person looks at the form before typing
 
     // Typed, not pasted: instant field population is a classic bot tell.
@@ -109,6 +121,7 @@ export class LystosSession {
         .first()
         .textContent({ timeout: 2_000 })
         .catch(() => null);
+      await this.dumpFailure(page, "login-rejected");
       throw new Error(
         `Lystos login failed for agent "${this.agent.id}" — still on the auth page.` +
           (message ? ` Lystos says: "${message.trim()}"` : "") +
@@ -121,6 +134,20 @@ export class LystosSession {
     await this.goto(page, this.agent.lystos.searchUrl);
     await page.context().storageState({ path: this.statePath });
     logger.info({ agent: this.agent.id, url: page.url() }, "logged in; session saved");
+  }
+
+  /** Save a screenshot + HTML when login goes wrong; guessing from a stack
+   *  trace is miserable, and one look at the page usually explains it. */
+  private async dumpFailure(page: Page, label: string): Promise<void> {
+    const dir = join(env.dataDir, "capture", this.agent.id);
+    try {
+      mkdirSync(dir, { recursive: true });
+      await page.screenshot({ path: join(dir, `${label}.png`), fullPage: true });
+      writeFileSync(join(dir, `${label}.html`), await page.content());
+      logger.error({ dir, label }, "saved a screenshot of the failure");
+    } catch {
+      // A screenshot is a nice-to-have; never let it mask the real error.
+    }
   }
 
   async close(): Promise<void> {
