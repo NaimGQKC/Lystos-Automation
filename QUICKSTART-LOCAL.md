@@ -90,6 +90,7 @@ queue.
 | `PRICE_MIN` / `PRICE_MAX` | Only this price band |
 | `LYSTOS_SEARCH_URL` | Watch a specific saved search instead |
 | `PROXY_SERVER` | Route through a Spanish residential IP |
+| `SLOW_MO` / `SETTLE_MS` | Drive the browser slower (default 300ms / 6s) |
 | `SMTP_HOST` / `IMAP_HOST` / `DRAFTS_MAILBOX` | Non-Gmail mailboxes |
 
 ## Multiple agents

@@ -1,7 +1,8 @@
 import type { AgentConfig } from "../../config/agent.js";
 import type { IngestionSource, RawListing } from "../types.js";
 import { logger } from "../../logger.js";
-import { LystosSession } from "./session.js";
+import { env } from "../../env.js";
+import { LystosSession, jitter } from "./session.js";
 import { LYSTOS } from "./selectors.js";
 import { parseListingsPayload } from "./parsers.js";
 
@@ -36,9 +37,14 @@ export class LystosScraper implements IngestionSource {
       });
 
       // (Re)load the saved search so the SPA fires its data requests, then give
-      // lazy/paginated requests a moment to land.
-      await page.goto(this.agent.lystos.searchUrl, { waitUntil: "networkidle" });
-      await page.waitForTimeout(3_000);
+      // lazy/paginated requests time to land. Unhurried on purpose.
+      await session.goto(page, this.agent.lystos.searchUrl);
+      // A slow scroll both triggers lazy loading and reads like a person.
+      for (let i = 0; i < 3; i++) {
+        await page.mouse.wheel(0, 900);
+        await jitter(1_800);
+      }
+      await jitter(env.settleMs);
 
       if (byId.size === 0) {
         logger.warn(

@@ -50,13 +50,13 @@ const FEED = {
 const SPA_HTML = `<!doctype html><html><body>
   <div data-testid="user-menu">Fake Lystos — logged in</div>
   <div id="app">loading…</div>
-  <script>fetch('/api/v2/search/listings').then(r => r.json())
+  <script>fetch('/catalog/v1/listings/views/explorer').then(r => r.json())
     .then(d => { document.getElementById('app').textContent = d.results.length + ' listings'; });
   </script></body></html>`;
 
 function fakeLystos(): Promise<{ server: Server; url: string }> {
   const server = createServer((req, res) => {
-    if (req.url?.startsWith("/api/v2/search/listings")) {
+    if (req.url?.startsWith("/catalog/v1/listings/views/explorer")) {
       res.setHeader("content-type", "application/json");
       res.end(JSON.stringify(FEED));
     } else {

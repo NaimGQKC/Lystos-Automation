@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { AgentConfig } from "../../config/agent.js";
 import { env } from "../../env.js";
 import { logger } from "../../logger.js";
-import { LystosSession } from "./session.js";
+import { LystosSession, jitter } from "./session.js";
 
 /** Seconds the browser stays open in headful mode so a human can click to
  *  the right page while everything is recorded. */
@@ -58,8 +58,7 @@ export async function capture(agent: AgentConfig): Promise<void> {
         .catch(() => {});
     });
 
-    await page.goto(agent.lystos.searchUrl, { waitUntil: "networkidle" }).catch(() => {});
-    await page.waitForTimeout(4_000);
+    await session.goto(page, agent.lystos.searchUrl).catch(() => {});
 
     if (headful) {
       console.log(
@@ -87,10 +86,11 @@ export async function capture(agent: AgentConfig): Promise<void> {
         }
       }
     } else {
-      for (let i = 0; i < 5; i++) {
-        await page.mouse.wheel(0, 2_000);
-        await page.waitForTimeout(1_500);
+      for (let i = 0; i < 4; i++) {
+        await page.mouse.wheel(0, 900);
+        await jitter(2_000);
       }
+      await jitter(env.settleMs);
     }
 
     if (!page.isClosed()) {
