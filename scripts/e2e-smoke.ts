@@ -23,26 +23,59 @@ import { buildServer } from "../src/server.js";
 import { report } from "../src/report.js";
 
 // ---------- fake Lystos: SPA page + listing-feed endpoint ----------
+/** Mirrors the real explorer response: records under `data`, Lystos's own
+ *  field names, and the quirks the live feed actually has (advertiserPhone
+ *  of "-", email only ever present inside the description text). */
 const FEED = {
-  results: [
+  data: [
     {
-      id: 98211, title: "Piso en Carrer de Verdi", price: 385000,
-      neighborhood: "Gràcia", municipality: "Barcelona", propertyType: "flat",
-      rooms: 3, surface: 85, advertiserType: "particular",
-      contact: { name: "Anna", phone: "612 345 678", email: "anna@example.com" },
-      url: "https://app.lystos.com/listing/98211",
+      id: "98211",
+      title: "Piso en venta en Carrer de Verdi",
+      price: 385000,
+      bedrooms: 3,
+      sqm: 85,
+      propertyType: "Piso",
+      neighborhood: "Gràcia",
+      municipalityName: "Barcelona",
+      advertiserName: "Anna",
+      advertiserType: "Particular",
+      advertiserTypeId: 2,
+      advertiserPhone: "612 345 678",
+      description:
+        "VENTA DIRECTA DEL PROPIETARIO, sin comisiones. " +
+        "Escríbeme a anna.puig (arroba) gmail (punto) com",
+      siteUrl: "https://www.idealista.com/inmueble/98211/",
+      isContacted: false, isAutoContacted: false, isDiscarded: false, isScam: false,
     },
     {
-      id: 98212, title: "Ático en Passeig de Gràcia", price: 890000, // over budget
-      neighborhood: "Eixample", municipality: "Barcelona", propertyType: "flat",
-      rooms: 4, surface: 120, advertiserType: "particular",
-      contact: { name: "Jordi", phone: "622 111 222", email: "jordi@example.com" },
+      id: "98212",
+      title: "Ático en Passeig de Gràcia",
+      price: 890000, // over the agent's budget
+      bedrooms: 4,
+      sqm: 120,
+      propertyType: "Ático",
+      neighborhood: "Eixample",
+      advertiserName: "Jordi",
+      advertiserType: "Particular",
+      advertiserTypeId: 2,
+      advertiserPhone: "622 111 222",
+      description: "Piso muy luminoso. Contacto: jordi@hotmail.es",
+      isContacted: false, isAutoContacted: false, isDiscarded: false, isScam: false,
     },
     {
-      id: 98213, title: "Piso en Sants", price: 310000, // agency, not particular
-      neighborhood: "Sants", municipality: "Barcelona", propertyType: "flat",
-      rooms: 2, surface: 70, advertiserType: "agency",
-      contact: { name: "Inmo XYZ", phone: "933 000 000", email: "info@inmoxyz.es" },
+      id: "98213",
+      title: "Piso en Sants",
+      price: 310000,
+      bedrooms: 2,
+      sqm: 70,
+      propertyType: "Piso",
+      neighborhood: "Sants",
+      advertiserName: "Inmo XYZ",
+      advertiserType: "Profesional", // agency — must never be contacted
+      advertiserTypeId: 1,
+      advertiserPhone: "933 000 000",
+      description: "Agencia inmobiliaria. info@idealista.com",
+      isContacted: false, isAutoContacted: false, isDiscarded: false, isScam: false,
     },
   ],
 };
@@ -50,15 +83,25 @@ const FEED = {
 const SPA_HTML = `<!doctype html><html><body>
   <div data-testid="user-menu">Fake Lystos — logged in</div>
   <div id="app">loading…</div>
-  <script>fetch('/catalog/v1/listings/views/explorer').then(r => r.json())
-    .then(d => { document.getElementById('app').textContent = d.results.length + ' listings'; });
+  <script>fetch('/catalog/v1/listings/views/explorer', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ advertiserTypeIdList: [2], limit: 40, offset: 0 }),
+    }).then(r => r.json())
+    .then(d => { document.getElementById('app').textContent = d.data.length + ' listings'; });
   </script></body></html>`;
 
 function fakeLystos(): Promise<{ server: Server; url: string }> {
   const server = createServer((req, res) => {
     if (req.url?.startsWith("/catalog/v1/listings/views/explorer")) {
-      res.setHeader("content-type", "application/json");
-      res.end(JSON.stringify(FEED));
+      let body = "";
+      req.on("data", (c) => (body += c));
+      req.on("end", () => {
+        // Mirror a real paged endpoint: only the first page has records.
+        const offset = Number(JSON.parse(body || "{}").offset ?? 0);
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify(offset > 0 ? { data: [] } : FEED));
+      });
     } else {
       res.setHeader("content-type", "text/html");
       res.end(SPA_HTML);
@@ -114,7 +157,9 @@ async function main() {
   const listings = await new LystosScraper(agent).fetchNewListings();
   assert.equal(listings.length, 3, `scraper intercepted ${listings.length}/3 listings`);
   assert.equal(listings[0]?.ownerPhone, "612 345 678");
-  ok("browser scraper intercepted the SPA's JSON feed and parsed 3 listings (id, price, zone, owner phone)");
+  // The email exists only inside the ad text, obfuscated.
+  assert.equal(listings[0]?.ownerEmail, "anna.puig@gmail.com");
+  ok("browser scraper intercepted the feed and parsed 3 listings, mining the obfuscated email out of the ad text");
 
   // 2) Pipeline: match, filter, ledger, enqueue.
   const stats = processListings(db, agent, "lystos", listings);
@@ -135,8 +180,8 @@ async function main() {
   });
   assert.equal(outcome, "drafted");
   assert.equal(drafts.length, 1);
-  assert.equal(drafts[0].to, "anna@example.com");
-  assert.equal(drafts[0].subject, "Tu flat de 3 hab., 85 m² en Gràcia");
+  assert.equal(drafts[0].to, "anna.puig@gmail.com");
+  assert.equal(drafts[0].subject, "Tu Piso de 3 hab., 85 m² en Gràcia");
   assert.ok(drafts[0].body.includes("Hola Anna"));
   assert.ok(drafts[0].body.includes("385.000 €"));
   ok("worker created an email DRAFT addressed to the owner (nothing sent)");
