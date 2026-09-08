@@ -1,10 +1,16 @@
 import { AgentConfigSchema, type AgentConfig } from "./agent.js";
 
-/** The Lystos view that lists FSBO / private-owner ("particulares") ads.
- *  Fixed path on the site — same for every agent — so it needs no config.
- *  Override per-install with LYSTOS_SEARCH_URL when the agent wants a
- *  narrower saved search (specific zones, price band, etc.). */
-export const DEFAULT_SEARCH_URL = "https://app.lystos.com/explora?anunciante=particular";
+/** The Lystos explorer view, confirmed from the live app.
+ *
+ *  Note the particulares/FSBO filter is NOT in this URL: the explorer sends
+ *  its filters in the POST body of
+ *  services.lystos.com/catalog/v1/listings/views/explorer, and the app
+ *  restores the agent's last-used filters from her account. We additionally
+ *  enforce privateOwnerOnly on every listing we parse, so an agency ad can't
+ *  slip through even if the UI filter isn't applied.
+ *
+ *  Override with LYSTOS_SEARCH_URL to watch a different saved search. */
+export const DEFAULT_SEARCH_URL = "https://app.lystos.com/explorer/search?premiseType=1";
 
 /** Zero-config agent: everything comes from env vars, no YAML needed.
  *  Used automatically when the agents/ directory is absent or empty. */
