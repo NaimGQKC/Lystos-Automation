@@ -25,6 +25,10 @@ export const env = {
   /** Extra settle time after a page load before we read anything, so lazy
    *  requests and late renders finish. */
   settleMs: Number(process.env.SETTLE_MS ?? 6000),
+  /** Attach to a Chrome you already have open and signed in, instead of
+   *  launching one. Start Chrome with --remote-debugging-port=9222 and set
+   *  this to http://127.0.0.1:9222. No new session, no device slot. */
+  chromeCdpUrl: process.env.CHROME_CDP_URL || undefined,
   /** Browser locale/timezone. A Spanish account browsing from a non-Spanish
    *  locale is an obvious mismatch, so these default to Spain. */
   locale: process.env.BROWSER_LOCALE ?? "es-ES",

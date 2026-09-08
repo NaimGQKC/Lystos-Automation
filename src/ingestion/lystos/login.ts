@@ -1,5 +1,5 @@
 import { chromium } from "playwright";
-import { existsSync, mkdirSync, rmSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentConfig } from "../../config/agent.js";
 import { env } from "../../env.js";
@@ -16,28 +16,30 @@ import { isAuthPage } from "./selectors.js";
  *  Run: npm run login
  */
 export async function login(agent: AgentConfig): Promise<void> {
-  const statePath = join(env.dataDir, "state", `${agent.id}.json`);
-  mkdirSync(join(env.dataDir, "state"), { recursive: true });
-
-  // A stale session is worse than none: it can leave the app half-signed-in.
-  if (existsSync(statePath)) {
-    rmSync(statePath);
-    logger.info({ statePath }, "removed the previous saved session");
+  if (env.chromeCdpUrl) {
+    console.log(
+      "\nCHROME_CDP_URL is set, so this tool uses the Chrome you already have open.\n" +
+        "Just sign in to Lystos in that window — there's nothing to do here.\n",
+    );
+    return;
   }
 
-  const browser = await chromium.launch({
+  // Sign in INTO the persistent profile the scraper uses, so the session
+  // survives restarts the way a normal browser's does.
+  const profileDir = join(env.dataDir, "profile", agent.id);
+  mkdirSync(profileDir, { recursive: true });
+
+  const context = await chromium.launchPersistentContext(profileDir, {
     headless: false, // always visible: a human is driving this
     executablePath: env.chromiumPath,
     proxy: env.proxyServer ? { server: env.proxyServer } : undefined,
     slowMo: env.slowMo,
-    args: ["--disable-blink-features=AutomationControlled"],
-  });
-  const context = await browser.newContext({
     locale: env.locale,
     timezoneId: env.timezoneId,
     viewport: { width: 1440, height: 900 },
+    args: ["--disable-blink-features=AutomationControlled"],
   });
-  const page = await context.newPage();
+  const page = context.pages()[0] ?? (await context.newPage());
 
   console.log(
     [
@@ -74,15 +76,14 @@ export async function login(agent: AgentConfig): Promise<void> {
   }
 
   if (!landed) {
-    await browser.close();
+    await context.close();
     throw new Error(
       "Didn't reach the app before timing out — nothing was saved. " +
         "Run `npm run login` again and complete the sign-in in the window.",
     );
   }
 
-  await context.storageState({ path: statePath });
-  console.log(`\nSession saved to ${statePath}. You can close the window.\n`);
-  logger.info({ agent: agent.id }, "session saved — later runs will reuse it");
-  await browser.close();
+  console.log(`\nSigned in. The profile at ${profileDir} will remember it.\n`);
+  logger.info({ agent: agent.id, profileDir }, "signed in — later runs reuse this profile");
+  await context.close();
 }

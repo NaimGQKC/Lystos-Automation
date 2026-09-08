@@ -35,6 +35,37 @@ Gmail/Outlook with 2FA need an **app password**, not the account password.
 
 ## 3. Sign in — ONCE
 
+Two ways. **Option A is the least intrusive**: the tool drives the Chrome
+you already use, already signed in. It creates no session and uses no
+device slot.
+
+### Option A — drive your own Chrome
+
+Close Chrome completely, then start it with remote debugging on. In
+PowerShell:
+
+```powershell
+& "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\lystos-chrome"
+```
+
+Sign in to Lystos in that window, once. That folder is now a normal Chrome
+profile that stays signed in — reuse the same command every time.
+
+Then add to `.env`:
+
+```
+CHROME_CDP_URL=http://127.0.0.1:9222
+```
+
+Leave that Chrome open when you run `npm run ingest`. The tool attaches to
+it, reads the feed in a tab, and never touches your login. If the window
+isn't signed in, it says so and stops rather than trying to sign in itself.
+
+(The separate `--user-data-dir` is required: recent Chrome refuses remote
+debugging on your default profile. It's a real profile, just a second one.)
+
+### Option B — let the tool keep its own profile
+
 **Lystos limits how many devices can be signed in at once, and every
 sign-in uses up a slot.** So this tool signs in a single time, by hand, and
 reuses that session forever after.
@@ -44,9 +75,10 @@ npm run login
 ```
 
 A browser window opens. Sign in there yourself, exactly as you normally
-would (including any "cerrar todas las sesiones" prompt or 2FA). As soon as
-you reach the app, the session is saved to `data\state\` and the window can
-be closed.
+would (including any "cerrar todas las sesiones" prompt or 2FA). The
+sign-in is kept in a persistent profile at `data\profile\`, so it survives
+restarts the same way your own browser does — you should not have to repeat
+this.
 
 If you ever see *"Has sobrepasado el límite de dispositivos activos"*: open
 Lystos in your normal browser, click **Cerrar todas las sesiones**, sign in
@@ -109,6 +141,7 @@ queue.
 | `ZONES=Gràcia,Eixample` | Only these areas |
 | `PRICE_MIN` / `PRICE_MAX` | Only this price band |
 | `LYSTOS_SEARCH_URL` | Watch a specific saved search instead |
+| `CHROME_CDP_URL` | Drive a Chrome you already have open (see step 3A) |
 | `PROXY_SERVER` | Route through a Spanish residential IP |
 | `SLOW_MO` / `SETTLE_MS` | Drive the browser slower (default 300ms / 6s) |
 | `SMTP_HOST` / `IMAP_HOST` / `DRAFTS_MAILBOX` | Non-Gmail mailboxes |
