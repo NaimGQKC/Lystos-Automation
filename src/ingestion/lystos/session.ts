@@ -84,16 +84,33 @@ export class LystosSession {
 
     // We may be on Lystos's own /login gate, which bounces to Keycloak a
     // moment later — so wait for the form itself rather than for a URL.
-    try {
-      await page.waitForSelector(LYSTOS.login.username, { timeout: 45_000, state: "visible" });
-    } catch {
-      await this.dumpFailure(page, "no-login-form");
-      throw new Error(
-        `Never reached the Lystos login form (stuck at ${page.url()}). ` +
-          `A screenshot is in ${join(env.dataDir, "capture", this.agent.id)}. ` +
-          "If the page looks logged in already, the saved session may be stale — " +
-          `delete ${this.statePath} and retry.`,
-      );
+    const formVisible = await page
+      .waitForSelector(LYSTOS.login.username, { timeout: 20_000, state: "visible" })
+      .then(() => true)
+      .catch(() => false);
+
+    if (!formVisible) {
+      // The gate sometimes waits for a click rather than redirecting itself.
+      const gate = page.locator(LYSTOS.login.gateButton).first();
+      if (await gate.isVisible({ timeout: 3_000 }).catch(() => false)) {
+        logger.info("clicking through the Lystos login gate");
+        await gate.click().catch(() => {});
+        await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => {});
+      }
+      const nowVisible = await page
+        .waitForSelector(LYSTOS.login.username, { timeout: 25_000, state: "visible" })
+        .then(() => true)
+        .catch(() => false);
+
+      if (!nowVisible) {
+        await this.dumpFailure(page, "no-login-form");
+        throw new Error(
+          `Never reached the Lystos login form (stuck at ${page.url()}).\n` +
+            `  Look at ${join(env.dataDir, "capture", this.agent.id, "no-login-form.png")} — it shows the page.\n` +
+            "  Most likely the saved session went stale. Re-run: npm run login\n" +
+            `  (that clears ${this.statePath} and signs in fresh).`,
+        );
+      }
     }
     await jitter(1_200); // a person looks at the form before typing
 

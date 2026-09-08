@@ -21,6 +21,13 @@ export const LYSTOS = {
     submit: "#kc-login",
     // Keycloak renders these when credentials are rejected.
     error: "#input-error, .alert-error, .pf-c-alert__title",
+    /** Lystos's own /login gate sometimes waits for a click instead of
+     *  bouncing straight to Keycloak. */
+    gateButton:
+      'button:has-text("Iniciar sesión"), a:has-text("Iniciar sesión"), ' +
+      'button:has-text("Acceder"), a:has-text("Acceder"), ' +
+      'button:has-text("Entrar"), a:has-text("Entrar"), ' +
+      'button:has-text("Log in"), a:has-text("Log in")',
   },
 
   /** Advertiser type ids used by the explorer filter.
