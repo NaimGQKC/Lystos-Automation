@@ -42,7 +42,13 @@ export const LYSTOS = {
    *    /account/v1/alerts/views/grouped     → the agent's configured alerts
    *  "coordinates" is deliberately excluded: it's map-pin data with no
    *  contact details. */
-  listingApiPatterns: ["catalog/v1/listings/views/explorer", "account/v1/alerts/views/grouped"],
+  listingApiPatterns: [
+    "catalog/v1/listings/views/explorer",
+    "account/v1/alerts/views/grouped",
+    // Opening a listing fetches its detail record, which may carry the full
+    // description (the list view can return a truncated preview).
+    "catalog/v1/listings/",
+  ],
 } as const;
 
 /** True when we are NOT inside the app yet.

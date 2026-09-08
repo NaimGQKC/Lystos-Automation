@@ -117,6 +117,25 @@ function reportContactCoverage(files: string[]): void {
   console.log(`  ...with a phone:            ${withPhone.length}  (${pct(withPhone.length)}%)`);
   console.log(`  ...reachable either way:    ${reachable.length}  (${pct(reachable.length)}%)`);
 
+  // A list endpoint often returns a truncated description preview. If the
+  // full text is where owners put their email, we'd never see it here — so
+  // measure before concluding that emails simply don't exist.
+  const descriptions = all
+    .map((l) => (l.raw as Record<string, unknown>)?.description)
+    .filter((d): d is string => typeof d === "string");
+  if (descriptions.length) {
+    const lengths = descriptions.map((d) => d.length);
+    const max = Math.max(...lengths);
+    const avg = Math.round(lengths.reduce((a, b) => a + b, 0) / lengths.length);
+    const clipped = descriptions.filter((d) => /[…]|\.\.\.$/.test(d.slice(-3))).length;
+    const atMax = lengths.filter((n) => n === max).length;
+    console.log("\n  description text (is it the full ad, or a preview?):");
+    console.log(`    average length: ${avg} chars,  longest: ${max}`);
+    console.log(`    ending in an ellipsis: ${clipped}`);
+    console.log(`    exactly at the longest length: ${atMax}` +
+      (atMax > 3 ? "  <-- suspicious: looks truncated by the API" : ""));
+  }
+
   const examples = withEmail.slice(0, 3).map((l) => {
     const email = normalizeEmail(l.ownerEmail)!;
     const [user, domain] = email.split("@");
