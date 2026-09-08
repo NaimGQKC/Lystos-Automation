@@ -1,26 +1,27 @@
-/** Starts your real Chrome with remote debugging on, using a profile this
- *  tool can attach to.
+/** Starts a real Chrome with remote debugging on, for the tool to attach to.
  *
- *  You do NOT sign into Google/Chrome in this window — it's an ordinary
- *  blank profile. You sign into Lystos once, and it stays signed in.
+ *  This uses a dedicated profile that persists between runs. You sign in to
+ *  Lystos in it ONCE; after that it stays signed in, so no run ever creates a
+ *  fresh login — which is what was exhausting the account's device slots.
  *
- *  Why a separate profile at all: since Chrome 136 the browser refuses
- *  remote debugging on your DEFAULT profile (a deliberate anti-cookie-theft
- *  measure). A second profile is the supported way round it.
+ *  You do NOT sign into Google/Chrome — skip any Chrome sign-in prompt. Only
+ *  the Lystos login matters.
+ *
+ *  Why a separate profile rather than your everyday one: since Chrome 136 the
+ *  browser refuses remote debugging on the default profile (an anti-cookie-
+ *  theft measure). A dedicated profile is the supported way round it.
  *
  *  Run: npm run chrome
  */
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { env } from "../src/env.js";
 
 const PORT = Number(process.env.CHROME_DEBUG_PORT ?? 9222);
 
-/** Usual install locations, most likely first. */
 function findChrome(): string | undefined {
   if (env.chromiumPath && existsSync(env.chromiumPath)) return env.chromiumPath;
-
   const candidates =
     process.platform === "win32"
       ? [
@@ -35,7 +36,6 @@ function findChrome(): string | undefined {
             "/Applications/Chromium.app/Contents/MacOS/Chromium",
           ]
         : ["/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser"];
-
   return candidates.find((p) => p && existsSync(p));
 }
 
@@ -51,7 +51,7 @@ function main(): void {
 
   const profileDir = resolve(join(env.dataDir, "chrome-profile"));
   mkdirSync(profileDir, { recursive: true });
-  const firstRun = !existsSync(join(profileDir, "Default"));
+  const firstRun = readdirSync(profileDir).length === 0;
 
   const child = spawn(
     chrome,
@@ -60,7 +60,7 @@ function main(): void {
       `--user-data-dir=${profileDir}`,
       "--no-first-run",
       "--no-default-browser-check",
-      "https://app.lystos.com/",
+      "https://app.lystos.com/explorer/search?premiseType=1",
     ],
     { detached: true, stdio: "ignore" },
   );
@@ -73,15 +73,16 @@ function main(): void {
       "  CHROME IS STARTING.",
       "",
       firstRun
-        ? "  This profile is new, so sign in to LYSTOS in that window.\n" +
-          "  You do NOT need a Google/Chrome password — skip any Chrome sign-in\n" +
-          "  prompt. Only Lystos matters, and only this once."
-        : "  This profile should already be signed in to Lystos.",
+        ? "  First run — sign in to LYSTOS in that window (once).\n" +
+          "  No Google/Chrome password needed; skip any Chrome sign-in prompt.\n" +
+          "  It stays signed in afterwards, so this is the only sign-in — and\n" +
+          "  therefore the only Lystos device slot this tool ever uses."
+        : "  This profile is already signed in to Lystos — nothing to do.",
       "",
-      "  Then add this line to your .env (once):",
+      "  Add this to your .env (once):",
       `      CHROME_CDP_URL=http://127.0.0.1:${PORT}`,
       "",
-      "  Leave the window open and run:  npm run ingest",
+      "  Then leave the window open and run:  npm run ingest",
       "=".repeat(70),
       "",
     ].join("\n"),
