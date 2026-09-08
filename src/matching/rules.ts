@@ -14,6 +14,11 @@ export function matchListing(agent: AgentConfig, listing: RawListing): MatchResu
     return { matched: false, reason: "not_private_owner" };
   }
 
+  // Lystos tracks contact state itself. If the agent already reached this
+  // owner through Lystos, don't message them again from here.
+  if (listing.alreadyContacted) return { matched: false, reason: "already_contacted_in_lystos" };
+  if (listing.discarded) return { matched: false, reason: "discarded_at_source" };
+
   if (listing.price !== undefined) {
     if (listing.price < f.priceMin) return { matched: false, reason: "below_price_min" };
     if (listing.price > f.priceMax) return { matched: false, reason: "above_price_max" };

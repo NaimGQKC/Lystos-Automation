@@ -15,6 +15,10 @@ export interface RawListing {
   ownerEmail?: string;
   /** true = published by a private owner ("particular"), false = agency, undefined = unknown */
   isPrivateOwner?: boolean;
+  /** The source already records this owner as contacted — respect that. */
+  alreadyContacted?: boolean;
+  /** Marked discarded/spam at the source. */
+  discarded?: boolean;
   raw: unknown;
 }
 
