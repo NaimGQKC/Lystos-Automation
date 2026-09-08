@@ -1,4 +1,5 @@
 import type { RawListing } from "../types.js";
+import { extractEmail } from "./extract.js";
 
 /** Parses the Lystos explorer feed.
  *
@@ -8,9 +9,10 @@ import type { RawListing } from "../types.js";
  *
  *  Two things worth knowing about this payload:
  *
- *  1. There is NO owner email field. The only contact detail is
- *     `advertiserPhone`, and it is frequently "-" or "" even for private
- *     sellers. Reaching owners by email is not possible from this feed.
+ *  1. There is no structured owner-email field. The only contact column is
+ *     `advertiserPhone`, frequently "-" or "" even for private sellers.
+ *     Owners who want to be emailed put the address in `description`, so we
+ *     mine it from there (see extract.ts — they usually obfuscate it).
  *  2. `advertiserTypeId` is the reliable private-seller flag: 2 = Particular
  *     (FSBO), 1 = Profesional (agency). The string `advertiserType` carries
  *     the same information and is used as a fallback.
@@ -37,8 +39,11 @@ export function parseListingsPayload(url: string, json: unknown): RawListing[] |
       sqm: num(it.sqm ?? it.sqmUsable),
       ownerName: cleanName(str(it.advertiserName)),
       ownerPhone: cleanPhone(str(it.advertiserPhone)),
-      // Not present in this feed — kept so other sources can supply it.
-      ownerEmail: str(it.advertiserEmail ?? it.email),
+      // No structured email field exists in this feed. Private sellers put
+      // theirs in the ad text instead, usually obfuscated.
+      ownerEmail:
+        str(it.advertiserEmail ?? it.email) ??
+        extractEmail(`${str(it.description) ?? ""}\n${str(it.title) ?? ""}`),
       isPrivateOwner: parsePrivateOwner(it),
       /** Lystos's own record of whether this listing was already contacted. */
       alreadyContacted: bool(it.isContacted) === true || bool(it.isAutoContacted) === true,

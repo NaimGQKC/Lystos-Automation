@@ -10,6 +10,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { env } from "../src/env.js";
+import { parseListingsPayload } from "../src/ingestion/lystos/parsers.js";
+import { normalizeEmail, normalizePhone } from "../src/matching/contact.js";
 
 const agentId = process.argv[2] ?? "default";
 const dir = join(env.dataDir, "capture", agentId);
@@ -82,7 +84,48 @@ function main() {
       console.log(JSON.stringify(rec.requestBody, null, 2).slice(0, 2_000));
     }
   }
+  reportContactCoverage(files);
   console.log("\nSend the above over — that's everything needed to finish the parser.\n");
+}
+
+/** The number that decides which channel is viable: of the private sellers in
+ *  this capture, how many can we actually reach, and how? */
+function reportContactCoverage(files: string[]): void {
+  const seen = new Map<string, ReturnType<typeof parseListingsPayload>[number]>();
+  for (const f of files) {
+    const rec = JSON.parse(readFileSync(join(dir, f), "utf8")) as { url: string; body: unknown };
+    const parsed = parseListingsPayload(rec.url, rec.body);
+    for (const l of parsed ?? []) seen.set(l.sourceId, l);
+  }
+  if (seen.size === 0) return;
+
+  const all = [...seen.values()];
+  const particulares = all.filter((l) => l.isPrivateOwner === true);
+  const withEmail = particulares.filter((l) => normalizeEmail(l.ownerEmail));
+  const withPhone = particulares.filter((l) => normalizePhone(l.ownerPhone));
+  const reachable = particulares.filter(
+    (l) => normalizeEmail(l.ownerEmail) || normalizePhone(l.ownerPhone),
+  );
+  const pct = (n: number) => (particulares.length ? Math.round((n / particulares.length) * 100) : 0);
+
+  console.log("\n" + "=".repeat(72));
+  console.log("CONTACT COVERAGE — can we actually reach these owners?");
+  console.log("=".repeat(72));
+  console.log(`  listings in capture:        ${all.length}`);
+  console.log(`  private sellers:            ${particulares.length}`);
+  console.log(`  ...with an email in the ad: ${withEmail.length}  (${pct(withEmail.length)}%)`);
+  console.log(`  ...with a phone:            ${withPhone.length}  (${pct(withPhone.length)}%)`);
+  console.log(`  ...reachable either way:    ${reachable.length}  (${pct(reachable.length)}%)`);
+
+  const examples = withEmail.slice(0, 3).map((l) => {
+    const email = normalizeEmail(l.ownerEmail)!;
+    const [user, domain] = email.split("@");
+    return `    ${user!.slice(0, 2)}***@${domain}  —  ${l.title ?? "(sin título)"}`;
+  });
+  if (examples.length) {
+    console.log("\n  emails found in ad text (masked):");
+    console.log(examples.join("\n"));
+  }
 }
 
 main();
