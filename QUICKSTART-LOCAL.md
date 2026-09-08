@@ -41,28 +41,30 @@ device slot.
 
 ### Option A — drive your own Chrome
 
-Close Chrome completely, then start it with remote debugging on. In
-PowerShell:
-
 ```powershell
-& "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\lystos-chrome"
+npm run chrome
 ```
 
-Sign in to Lystos in that window, once. That folder is now a normal Chrome
-profile that stays signed in — reuse the same command every time.
+That opens a real Chrome window on Lystos. **Sign in to Lystos there once.**
 
-Then add to `.env`:
+You do **not** need a Google/Chrome password — skip any "sign in to Chrome"
+prompt. It's an ordinary blank profile; the only account that matters is
+Lystos, and it stays signed in from then on.
+
+Then add to `.env` (once):
 
 ```
 CHROME_CDP_URL=http://127.0.0.1:9222
 ```
 
-Leave that Chrome open when you run `npm run ingest`. The tool attaches to
-it, reads the feed in a tab, and never touches your login. If the window
-isn't signed in, it says so and stops rather than trying to sign in itself.
+From now on: `npm run chrome`, leave the window open, run `npm run ingest`.
+The tool attaches to that window, reads the feed in a tab, and never touches
+your login. If the window isn't signed in it says so and stops, rather than
+signing in on your behalf.
 
-(The separate `--user-data-dir` is required: recent Chrome refuses remote
-debugging on your default profile. It's a real profile, just a second one.)
+Why a second profile rather than your everyday one: since Chrome 136 the
+browser refuses remote debugging on the default profile, as an
+anti-cookie-theft measure. A second profile is the supported way round it.
 
 ### Option B — let the tool keep its own profile
 
@@ -142,6 +144,7 @@ queue.
 | `PRICE_MIN` / `PRICE_MAX` | Only this price band |
 | `LYSTOS_SEARCH_URL` | Watch a specific saved search instead |
 | `CHROME_CDP_URL` | Drive a Chrome you already have open (see step 3A) |
+| `CHROME_DEBUG_PORT` | Port for `npm run chrome` (default 9222) |
 | `PROXY_SERVER` | Route through a Spanish residential IP |
 | `SLOW_MO` / `SETTLE_MS` | Drive the browser slower (default 300ms / 6s) |
 | `SMTP_HOST` / `IMAP_HOST` / `DRAFTS_MAILBOX` | Non-Gmail mailboxes |
