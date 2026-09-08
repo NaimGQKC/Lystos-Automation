@@ -69,7 +69,7 @@ export class LystosScraper implements IngestionSource {
       await jitter(env.settleMs);
 
       if (feedRequest) {
-        await this.paginate(page, feedRequest, byId);
+        await this.readFeed(page, feedRequest, byId);
       } else {
         logger.warn(
           { agent: this.agent.id },
@@ -91,17 +91,33 @@ export class LystosScraper implements IngestionSource {
     }
   }
 
-  /** Replay the captured request with a rising offset until the feed runs
-   *  out. Uses the page's own request context, so it carries her session and
-   *  looks like the app's traffic rather than a separate client. */
-  private async paginate(
+  /** Read the whole feed by replaying the app's own request.
+   *
+   *  Crucially this sets the particulares filter itself rather than trusting
+   *  whatever the UI last had selected — loading the explorer fresh sends
+   *  advertiserTypeIdList: [] (everything), which is why an untouched run
+   *  returned agencies too. Uses the page's request context, so it carries
+   *  her session and reads as the app's own traffic. */
+  private async readFeed(
     page: Awaited<ReturnType<LystosSession["page"]>>,
     feed: FeedRequest,
     byId: Map<string, RawListing>,
   ): Promise<void> {
     const limit = Number(feed.payload.limit) || PAGE_SIZE;
+    const payload: Record<string, unknown> = { ...feed.payload };
 
-    for (let pageIndex = 1; pageIndex < MAX_PAGES; pageIndex++) {
+    if (this.agent.filters.privateOwnerOnly) {
+      payload.advertiserTypeIdList = [LYSTOS.advertiserType.PARTICULAR];
+      logger.info("asking Lystos for particulares only (advertiserTypeIdList: [2])");
+    }
+    // Let the agent's own price band narrow the query server-side too.
+    if (this.agent.filters.priceMin > 0) payload.minPrice = this.agent.filters.priceMin;
+    if (Number.isFinite(this.agent.filters.priceMax) && this.agent.filters.priceMax < Number.MAX_SAFE_INTEGER) {
+      payload.maxPrice = this.agent.filters.priceMax;
+    }
+
+    // Start at 0: the app's own first page was unfiltered, so re-read it.
+    for (let pageIndex = 0; pageIndex < MAX_PAGES; pageIndex++) {
       const offset = pageIndex * limit;
       await jitter(2_500); // pace the requests like a person scrolling
 
@@ -109,7 +125,7 @@ export class LystosScraper implements IngestionSource {
       try {
         const response = await page.request.post(feed.url, {
           headers: feed.headers,
-          data: { ...feed.payload, limit, offset },
+          data: { ...payload, limit, offset },
           timeout: 45_000,
         });
         if (!response.ok()) {
@@ -124,8 +140,8 @@ export class LystosScraper implements IngestionSource {
 
       const before = byId.size;
       for (const l of batch) byId.set(l.sourceId, l);
-      logger.debug(
-        { offset, received: batch.length, newListings: byId.size - before },
+      logger.info(
+        { offset, received: batch.length, total: byId.size },
         "read a page of the feed",
       );
 

@@ -86,10 +86,14 @@ const SPA_HTML = `<!doctype html><html><body>
   <script>fetch('/catalog/v1/listings/views/explorer', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ advertiserTypeIdList: [2], limit: 40, offset: 0 }),
+      body: JSON.stringify({ advertiserTypeIdList: [], limit: 3, offset: 0 }),
     }).then(r => r.json())
     .then(d => { document.getElementById('app').textContent = d.data.length + ' listings'; });
   </script></body></html>`;
+
+/** Payloads the fake backend received — lets the test assert that the
+ *  scraper asked for particulares rather than trusting the UI's filter. */
+const feedRequests: Record<string, unknown>[] = [];
 
 function fakeLystos(): Promise<{ server: Server; url: string }> {
   const server = createServer((req, res) => {
@@ -97,8 +101,10 @@ function fakeLystos(): Promise<{ server: Server; url: string }> {
       let body = "";
       req.on("data", (c) => (body += c));
       req.on("end", () => {
+        const payload = JSON.parse(body || "{}") as Record<string, unknown>;
+        feedRequests.push(payload);
         // Mirror a real paged endpoint: only the first page has records.
-        const offset = Number(JSON.parse(body || "{}").offset ?? 0);
+        const offset = Number(payload.offset ?? 0);
         res.setHeader("content-type", "application/json");
         res.end(JSON.stringify(offset > 0 ? { data: [] } : FEED));
       });
@@ -160,6 +166,21 @@ async function main() {
   // The email exists only inside the ad text, obfuscated.
   assert.equal(listings[0]?.ownerEmail, "anna.puig@gmail.com");
   ok("browser scraper intercepted the feed and parsed 3 listings, mining the obfuscated email out of the ad text");
+
+  // The scraper must set the particulares filter itself: loading the explorer
+  // fresh sends an empty advertiser filter, so relying on the UI returns
+  // agencies too.
+  const filtered = feedRequests.filter(
+    (r) => JSON.stringify(r.advertiserTypeIdList) === "[2]",
+  );
+  assert.ok(filtered.length > 0, "no request asked Lystos for particulares only");
+  // And it must page: offset 0 then 40.
+  const offsets = filtered.map((r) => Number(r.offset));
+  assert.ok(
+    offsets.includes(0) && offsets.some((o) => o > 0),
+    `the feed was not paged through (offsets seen: ${offsets.join(", ")})`,
+  );
+  ok("asked Lystos for particulares only (advertiserTypeIdList: [2]) and paged through the feed");
 
   // 2) Pipeline: match, filter, ledger, enqueue.
   const stats = processListings(db, agent, "lystos", listings);

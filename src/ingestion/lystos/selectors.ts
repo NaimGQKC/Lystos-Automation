@@ -23,6 +23,10 @@ export const LYSTOS = {
     error: "#input-error, .alert-error, .pf-c-alert__title",
   },
 
+  /** Advertiser type ids used by the explorer filter.
+   *  Confirmed live: records with advertiserTypeId 2 read "Particular". */
+  advertiserType: { PARTICULAR: 2, PROFESIONAL: 1 },
+
   /** Lystos caps how many devices may be signed in at once, and every fresh
    *  login consumes a slot. Detected so we can stop rather than burn more.
    *  We never click "cerrar todas las sesiones" ourselves — that would sign
